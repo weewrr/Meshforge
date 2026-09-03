@@ -10,8 +10,5 @@ server/**/__pycache__/
 *.pyc
 .DS_Store
 
-# 本地记忆与临时文件(不上传)
-.workbuddy/
-.ui-check/
 # electron-vite 运行期自动生成的临时配置
 electron.vite.config.*.mjs

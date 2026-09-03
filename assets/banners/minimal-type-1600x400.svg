@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 400" width="1600" height="400"
+     role="img" aria-label="MeshForge - local image to 3D mesh generation">
+  <title>MeshForge - image to 3D mesh, forged locally</title>
+
+  <style>
+    /* default = light (GitHub light theme) */
+    .bg      { fill: #fbfcfe; }
+    .grid    { stroke: rgba(15,23,42,0.045); }
+    .t1      { fill: #0d1526; }
+    .t2      { fill: #4a5768; }
+    .t3      { fill: #9aa6b8; }
+    .pill    { fill: rgba(47,110,224,0.08); stroke: rgba(47,110,224,0.26); }
+    .pillTxt { fill: #2f6ee0; }
+    .ga      { stop-color: #2f6ee0; }
+    .gb      { stop-color: #7c3aed; }
+    .tri     { fill: none; stroke: rgba(15,23,42,0.30); }
+    .tridot  { fill: #2f6ee0; }
+
+    /* dark mode */
+    @media (prefers-color-scheme: dark) {
+      .bg      { fill: #0a0e17; }
+      .grid    { stroke: rgba(255,255,255,0.05); }
+      .t1      { fill: #f4f7fc; }
+      .t2      { fill: #8b97ae; }
+      .t3      { fill: #55607a; }
+      .pill    { fill: rgba(79,140,255,0.11); stroke: rgba(79,140,255,0.34); }
+      .pillTxt { fill: #7fa9ff; }
+      .ga      { stop-color: #4f8cff; }
+      .gb      { stop-color: #a855f7; }
+      .tri     { stroke: rgba(255,255,255,0.26); }
+      .tridot  { fill: #cbd9ff; }
+    }
+
+    .mono { font-family: 'JetBrains Mono', 'SF Mono', Consolas, Menlo, monospace; }
+    .sans { font-family: 'Segoe UI', 'Helvetica Neue', Inter, Arial, sans-serif; }
+  </style>
+
+  <defs>
+    <linearGradient id="gw" x1="0" y1="0" x2="1" y2="0">
+      <stop class="ga" offset="0"/>
+      <stop class="gb" offset="1"/>
+    </linearGradient>
+    <pattern id="bgGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke-width="1" class="grid"/>
+    </pattern>
+  </defs>
+
+  <!-- backdrop -->
+  <rect width="1600" height="400" class="bg"/>
+  <rect width="1600" height="400" fill="url(#bgGrid)"/>
+
+  <!-- flanking wireframe triangles -->
+  <path d="M148.9 155.4L126.9 232L204.2 212.7Z" class="tri" stroke-width="1.3"/>
+  <path d="M153.1 172.3L139.5 219.8L187.4 207.9Z" class="tri" stroke-width="1" stroke-dasharray="2 6"/>
+  <circle cx="160" cy="200" r="2.6" class="tridot"/>
+
+  <path d="M1451.1 155.4L1395.8 212.7L1473.1 232Z" class="tri" stroke-width="1.3"/>
+  <path d="M1446.9 172.3L1412.6 207.9L1460.5 219.8Z" class="tri" stroke-width="1" stroke-dasharray="2 6"/>
+  <circle cx="1440" cy="200" r="2.6" class="tridot"/>
+
+  <!-- wordmark -->
+  <rect x="674" y="104" width="252" height="30" rx="15" class="pill"/>
+  <text x="800" y="124" text-anchor="middle" class="mono pillTxt"
+        font-size="12" letter-spacing="1.7">LOCAL-FIRST &#183; OPEN SOURCE</text>
+
+  <text x="800" y="232" text-anchor="middle" class="sans t1"
+        font-size="96" font-weight="700" letter-spacing="6">MESH<tspan fill="url(#gw)">FORGE</tspan></text>
+  <rect x="690" y="258" width="220" height="4" rx="2" fill="url(#gw)"/>
+
+  <text x="800" y="306" text-anchor="middle" class="mono t2" font-size="21">image &#8594; 3D mesh &#183; node workflows</text>
+  <text x="800" y="350" text-anchor="middle" class="mono t3" font-size="13" letter-spacing="3">ELECTRON &#183; REACT &#183; FASTAPI &#183; THREE.JS</text>
+</svg>

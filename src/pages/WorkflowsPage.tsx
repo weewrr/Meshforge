@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -19,10 +19,12 @@ import { useWorkflowsStore } from '../stores/workflows'
 import { useWorkflowRunStore } from '../stores/workflowRun'
 import { useNavigationStore } from '../stores/navigation'
 import { useLogsStore } from '../stores/logs'
+import { uploadFile } from '../api'
 import ExtensionsPanel from './workflows/ExtensionsPanel'
 import WorkflowEdge from './workflows/WorkflowEdge'
 import OpenPopup from './workflows/OpenPopup'
 import { nodeTypes } from './workflows/nodes'
+import { useT } from '../i18n'
 
 function reaches(
   from: string,
@@ -68,20 +70,21 @@ function nodeSize(n: WFNode): { w: number; h: number } {
   }
 }
 
-const PALETTE_NODES: { payload: string; label: string; hint: string }[] = [
-  { payload: 'builtin:imageNode', label: 'Image', hint: '输入图片' },
-  { payload: 'builtin:textNode', label: 'Text', hint: '输入文本' },
-  { payload: 'builtin:meshNode', label: 'Load 3D Mesh', hint: '加载网格' },
-  { payload: 'builtin:generatorNode', label: 'Generate Mesh', hint: '图生 3D' },
-  { payload: 'builtin:previewNode', label: 'Preview', hint: '预览网格' },
-  { payload: 'builtin:outputNode', label: 'Add to Scene', hint: '输出到场景' },
-  { payload: 'builtin:waitNode', label: 'Wait', hint: '暂停等待' },
-  { payload: 'builtin:whileNode', label: 'While', hint: '循环' },
-  { payload: 'builtin:forEachNode', label: 'For Each', hint: '遍历' }
+const PALETTE_NODES: { payload: string; labelKey: string; hintKey: string }[] = [
+  { payload: 'builtin:imageNode', labelKey: 'workflows.palette.imageLabel', hintKey: 'workflows.palette.imageHint' },
+  { payload: 'builtin:textNode', labelKey: 'workflows.palette.textLabel', hintKey: 'workflows.palette.textHint' },
+  { payload: 'builtin:meshNode', labelKey: 'workflows.palette.meshLabel', hintKey: 'workflows.palette.meshHint' },
+  { payload: 'builtin:generatorNode', labelKey: 'workflows.palette.generateLabel', hintKey: 'workflows.palette.generateHint' },
+  { payload: 'builtin:previewNode', labelKey: 'workflows.palette.previewLabel', hintKey: 'workflows.palette.previewHint' },
+  { payload: 'builtin:outputNode', labelKey: 'workflows.palette.outputLabel', hintKey: 'workflows.palette.outputHint' },
+  { payload: 'builtin:waitNode', labelKey: 'workflows.palette.waitLabel', hintKey: 'workflows.palette.waitHint' },
+  { payload: 'builtin:whileNode', labelKey: 'workflows.palette.whileLabel', hintKey: 'workflows.palette.whileHint' },
+  { payload: 'builtin:forEachNode', labelKey: 'workflows.palette.forEachLabel', hintKey: 'workflows.palette.forEachHint' }
 ]
 
 function Canvas() {
   const { screenToFlowPosition } = useReactFlow()
+  const t = useT()
   const current = useWorkflowsStore((s) => s.current)
   const applyNodeChanges = useWorkflowsStore((s) => s.applyNodeChanges)
   const applyEdgeChanges = useWorkflowsStore((s) => s.applyEdgeChanges)
@@ -99,6 +102,11 @@ function Canvas() {
   const connectionCompletedRef = useRef(false)
   const [pendingDropPos, setPendingDropPos] = useState<{ x: number; y: number } | null>(null)
   const [connIndex, setConnIndex] = useState(0)
+  // Active row for the Space palette (↑↓ navigation, Modly NodePalette parity).
+  const [paletteIndex, setPaletteIndex] = useState(0)
+  // External image drag (from desktop) → show a drop hint and create a workflow
+  // skeleton on drop (Image node + first model extension + edge).
+  const [fileDragging, setFileDragging] = useState(false)
 
   function closePalette(): void {
     pendingConnectionRef.current = null
@@ -116,6 +124,7 @@ function Canvas() {
       if (e.code === 'Space') {
         e.preventDefault()
         setPaletteQuery('')
+        setPaletteIndex(0)
         setPaletteOpen((v) => !v)
       } else if (e.key === 'Escape') {
         closePalette()
@@ -132,12 +141,12 @@ function Canvas() {
   const paletteItems = [
     ...PALETTE_NODES.map((n) => {
       const type = n.payload.slice('builtin:'.length)
-      return { ...n, ports: nodePorts(type) }
+      return { payload: n.payload, label: t(n.labelKey), hint: t(n.hintKey), ports: nodePorts(type) }
     }),
     ...allExtensions().map((e) => ({
       payload: `extension:${e.id}`,
       label: e.display_name,
-      hint: e.kind === 'model' ? '生成' : '工具',
+      hint: t(e.kind === 'model' ? 'workflows.palette.kindGenerate' : 'workflows.palette.kindTools'),
       ports: { inputs: e.input === 'none' ? [] : [e.input], output: e.output }
     }))
   ].filter((n) => {
@@ -164,25 +173,42 @@ function Canvas() {
     return !cur.edges.some((e) => e.target === sourceNode.id && e.targetHandle === handleId)
   })
 
-  // Compact connection list: close on outside click / Escape, navigate with ↑↓.
+  // Palette keyboard navigation. Connection-drag list: ↑↓ over compatible
+  // nodes, Enter to pick. Space palette: same keys with its own active row
+  // (Modly NodePalette parity). When the Space search box is focused its own
+  // onKeyDown drives navigation (window handler skips it to avoid double-fire).
   useEffect(() => {
-    if (!(paletteOpen && pendingConn)) return
+    if (!paletteOpen) return
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setConnIndex((i) => Math.min(i + 1, paletteItems.length - 1))
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setConnIndex((i) => Math.max(i - 1, 0))
-      } else if (e.key === 'Enter') {
-        e.preventDefault()
-        const item = paletteItems[connIndex]
-        if (item) addAtCenter(item.payload)
-      } else if (e.key === 'Escape') {
-        closePalette()
+      const count = paletteItems.length
+      const inSearch = !!(e.target as HTMLElement).classList?.contains('wf-palette__search')
+      // Space palette's search box owns its keys while focused (its onKeyDown
+      // drives ↑↓/Enter/Escape) — skip here to avoid double-firing.
+      if (!pendingConn && inSearch) return
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (count === 0) return
+        const step = (i: number): number => (e.key === 'ArrowDown' ? Math.min(i + 1, count - 1) : Math.max(i - 1, 0))
+        if (pendingConn) {
+          e.preventDefault()
+          setConnIndex(step)
+        } else {
+          e.preventDefault()
+          setPaletteIndex(step)
+        }
+        return
       }
+      if (e.key === 'Enter') {
+        const item = paletteItems[pendingConn ? connIndex : paletteIndex]
+        if (item) {
+          e.preventDefault()
+          addAtCenter(item.payload)
+        }
+        return
+      }
+      if (e.key === 'Escape') closePalette()
     }
     const onDown = (e: MouseEvent): void => {
+      if (!pendingConn) return
       const el = document.querySelector('.wf-conn-menu')
       if (el && el.contains(e.target as Node)) return
       closePalette()
@@ -194,7 +220,7 @@ function Canvas() {
       document.removeEventListener('mousedown', onDown)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paletteOpen, pendingConn, connIndex, paletteItems])
+  }, [paletteOpen, pendingConn, connIndex, paletteIndex, paletteItems])
 
   function addAtCenter(payload: string): void {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -233,6 +259,97 @@ function Canvas() {
     addNode(node)
     return node
   }
+
+  // Drop an external image file onto the canvas → auto-create a ready-to-run
+  // Image → Model skeleton. Picks the first installed model-kind extension; if
+  // none are loaded, falls back to the legacy `generatorNode` (mock-relief).
+  const handleFileDrop = useCallback(
+    (file: File, clientX: number, clientY: number) => {
+      if (!file.type.startsWith('image/')) {
+        useLogsStore.getState().log('warn', `Ignoring non-image file: ${file.name}`)
+        return
+      }
+
+      const position = screenToFlowPosition({ x: clientX, y: clientY })
+      const parent = containerAtScreen(clientX, clientY)
+      const imagePos = parent
+        ? { x: position.x - parent.position.x, y: position.y - parent.position.y }
+        : position
+      const MODEL_OFFSET_X = 260
+      const modelPos = parent
+        ? { x: imagePos.x + MODEL_OFFSET_X, y: imagePos.y }
+        : { x: position.x + MODEL_OFFSET_X, y: position.y }
+
+      useLogsStore.getState().log('info', `Uploading image ${file.name}…`)
+
+      void uploadFile(file)
+        .then(({ url, fileName }) => {
+          // 1. Image node at the drop point.
+          const imageId = crypto.randomUUID()
+          addNode({
+            id: imageId,
+            type: 'imageNode',
+            position: imagePos,
+            ...(parent ? { parentId: parent.id } : {}),
+            data: {
+              label: fileName,
+              color: nodeSpec('imageNode').color,
+              params: { url, fileName }
+            }
+          })
+
+          // 2. Model node — prefer the first installed model extension.
+          const firstModel = allExtensions().find((e) => e.kind === 'model')
+          let modelId: string
+          let modelLabel: string
+          if (firstModel) {
+            modelId = crypto.randomUUID()
+            addNode({
+              id: modelId,
+              type: 'extensionNode',
+              position: modelPos,
+              ...(parent ? { parentId: parent.id } : {}),
+              data: {
+                label: firstModel.display_name,
+                color: nodeSpec('extensionNode').color,
+                params: {},
+                extensionId: firstModel.id
+              }
+            })
+            modelLabel = firstModel.display_name
+          } else {
+            const fallback = createNodeFromPayload('builtin:generatorNode', modelPos)
+            if (!fallback) {
+              useLogsStore.getState().log('error', 'No model extension found, and generatorNode creation failed')
+              return
+            }
+            if (parent) {
+              fallback.parentId = parent.id
+            }
+            addNode(fallback)
+            modelId = fallback.id
+            modelLabel = String(fallback.data.label ?? 'Generate Mesh')
+          }
+
+          // 3. Wire Image.out → Model.in.
+          connect({
+            source: imageId,
+            sourceHandle: OUT_HANDLE,
+            target: modelId,
+            targetHandle: IN_HANDLE
+          })
+
+          useLogsStore.getState().log('info', `Created workflow: Image → ${modelLabel}`)
+        })
+        .catch((err: unknown) => {
+          useLogsStore.getState().log(
+            'error',
+            `Upload failed: ${err instanceof Error ? err.message : String(err)}`
+          )
+        })
+    },
+    [screenToFlowPosition, addNode, connect]
+  )
 
   // When a node is dropped, attach/detach it to a While container based on its
   // center falling inside the container's bounds (Modly parity). Children keep a
@@ -380,9 +497,29 @@ function Canvas() {
       ref={canvasRef}
       onDragOver={(e) => {
         e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
+        // External file drag → 'copy' (the image stays on disk, we upload a copy).
+        // Internal palette drag → 'move' (we instantiate a node in the workflow).
+        const isFile = Array.from(e.dataTransfer.types).includes('Files')
+        e.dataTransfer.dropEffect = isFile ? 'copy' : 'move'
+        if (isFile && !fileDragging) setFileDragging(true)
+      }}
+      onDragLeave={(e) => {
+        // Only clear when the cursor truly leaves the canvas, not when crossing
+        // into a child element (relatedTarget check).
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setFileDragging(false)
+        }
       }}
       onDrop={(e) => {
+        setFileDragging(false)
+        // 1. External image file → auto-build a ready-to-run Image → Model skeleton.
+        const file = e.dataTransfer.files?.[0]
+        if (file) {
+          e.preventDefault()
+          handleFileDrop(file, e.clientX, e.clientY)
+          return
+        }
+        // 2. Internal palette drop (existing).
         const payload = e.dataTransfer.getData('application/meshforge-node')
         if (!payload) return
         e.preventDefault()
@@ -390,6 +527,19 @@ function Canvas() {
         spawnNode(payload, position, e.clientX, e.clientY)
       }}
     >
+      {fileDragging && (
+        <div className="wf-dropzone" aria-hidden="true">
+          <div className="wf-dropzone__inner">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+            <p className="wf-dropzone__title">{t('workflows.dropzone.title')}</p>
+            <p className="wf-dropzone__hint">{t('workflows.dropzone.hint')}</p>
+          </div>
+        </div>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -433,7 +583,7 @@ function Canvas() {
           }}
         >
           <div className="wf-conn-menu__title">
-            {pendingConn.handleType === 'source' ? '连接到的节点' : '连接来源节点'}
+            {pendingConn.handleType === 'source' ? t('workflows.conn.target') : t('workflows.conn.source')}
           </div>
           <div className="wf-conn-menu__list">
             {paletteItems.map((item, idx) => (
@@ -456,7 +606,7 @@ function Canvas() {
               </button>
             ))}
             {paletteItems.length === 0 && (
-              <div className="wf-conn-menu__empty">没有类型兼容的可连接节点</div>
+              <div className="wf-conn-menu__empty">{t('workflows.conn.empty')}</div>
             )}
           </div>
         </div>
@@ -468,23 +618,35 @@ function Canvas() {
             <input
               className="wf-palette__search"
               autoFocus
-              placeholder="搜索节点…"
+              placeholder={t('workflows.palette.searchPlaceholder')}
               value={paletteQuery}
-              onChange={(e) => setPaletteQuery(e.target.value)}
+              onChange={(e) => {
+                setPaletteQuery(e.target.value)
+                setPaletteIndex(0)
+              }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && paletteItems.length > 0) {
+                const count = paletteItems.length
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                  if (count === 0) return
                   e.preventDefault()
-                  addAtCenter(paletteItems[0].payload)
+                  setPaletteIndex((i) => (e.key === 'ArrowDown' ? Math.min(i + 1, count - 1) : Math.max(i - 1, 0)))
+                } else if (e.key === 'Enter') {
+                  const item = paletteItems[paletteIndex]
+                  if (item) {
+                    e.preventDefault()
+                    addAtCenter(item.payload)
+                  }
                 } else if (e.key === 'Escape') {
                   closePalette()
                 }
               }}
             />
             <div className="wf-palette__list">
-              {paletteItems.map((item) => (
+              {paletteItems.map((item, idx) => (
                 <button
                   key={item.payload}
-                  className="wf-palette__item"
+                  className={`wf-palette__item ${idx === paletteIndex ? 'wf-palette__item--active' : ''}`}
+                  onMouseEnter={() => setPaletteIndex(idx)}
                   onClick={() => addAtCenter(item.payload)}
                 >
                   <span className="wf-palette__label">{item.label}</span>
@@ -493,11 +655,11 @@ function Canvas() {
               ))}
               {paletteItems.length === 0 && (
                 <div className="wf-palette__empty">
-                  {pendingConn ? '没有类型兼容的可连接节点' : '无匹配节点'}
+                  {pendingConn ? t('workflows.conn.empty') : t('workflows.palette.noMatches')}
                 </div>
               )}
             </div>
-            <div className="wf-palette__footer">Enter 添加 · Esc 关闭</div>
+            <div className="wf-palette__footer">{t('workflows.palette.footer')}</div>
           </div>
         </div>
       )}
@@ -575,16 +737,17 @@ function createNodeFromPayload(payload: string, position: { x: number; y: number
 // ─── Help modal ──────────────────────────────────────────────────────────────
 
 function HelpModal({ onClose }: { onClose: () => void }) {
+  const t = useT()
   const rows: [string, string][] = [
-    ['Space', '打开节点面板（搜索 / Enter 添加）'],
-    ['Ctrl + Z / Ctrl + Y', '撤销 / 重做'],
-    ['Ctrl + T', '新建工作流'],
-    ['Ctrl + W', '关闭当前标签页'],
-    ['Ctrl + Tab', '切换标签页'],
-    ['Delete', '删除选中的节点或连线'],
-    ['拖拽', '从右侧节点面板拖到画布；拖动节点产生撤销记录'],
-    ['连线', '从节点右侧端口拖到左侧端口；颜色表示数据类型'],
-    ['Wait 节点', '运行到此暂停，点击节点上的“继续”恢复']
+    ['Space', t('workflows.help.openPanel')],
+    ['Ctrl + Z / Ctrl + Y', t('workflows.help.undoRedo')],
+    ['Ctrl + T', t('workflows.help.newWorkflow')],
+    ['Ctrl + W', t('workflows.help.closeTab')],
+    ['Ctrl + Tab', t('workflows.help.switchTab')],
+    ['Delete', t('workflows.help.deleteNode')],
+    ['Drag', t('workflows.help.drag')],
+    ['Connect', t('workflows.help.connect')],
+    ['Wait node', t('workflows.help.waitNode')]
   ]
   return (
     <div
@@ -594,7 +757,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
       }}
     >
       <div className="wf-modal__card wf-modal__card--wide">
-        <p className="wf-modal__title">工作流使用指南</p>
+        <p className="wf-modal__title">{t('workflows.help.title')}</p>
         <div className="wf-help">
           {rows.map(([key, desc]) => (
             <div key={key} className="wf-help__row">
@@ -605,7 +768,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="wf-modal__actions">
           <button className="primary" onClick={onClose}>
-            知道了
+            {t('workflows.help.gotIt')}
           </button>
         </div>
       </div>
@@ -614,6 +777,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function WorkflowsPage() {
+  const t = useT()
   const workflows = useWorkflowsStore((s) => s.workflows)
   const current = useWorkflowsStore((s) => s.current)
   const loaded = useWorkflowsStore((s) => s.loaded)
@@ -649,26 +813,25 @@ export default function WorkflowsPage() {
 
   const reorderTab = useWorkflowsStore((s) => s.reorderTab)
 
-  // Imperative file input — committing a hidden <input type="file"> through React
-  // freezes the renderer on some Electron builds. Create it on demand instead.
-  function openImportPicker(): void {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.json,application/json'
-    input.onchange = async () => {
-      const file = input.files?.[0]
-      if (!file) return
-      try {
-        const parsed = JSON.parse(await file.text())
-        if (typeof parsed?.id !== 'string' || !Array.isArray(parsed?.nodes)) {
-          throw new Error('不是有效的工作流 JSON')
-        }
-        await importWorkflow(parsed)
-      } catch (err) {
-        useLogsStore.getState().error(`import workflow: ${err}`)
-      }
+  // Native-dialog workflow import — the main process opens the dialog, reads
+  // the JSON and returns its content (the sandboxed renderer has no fs access,
+  // and <input type=file> freezes this machine's renderer, see HANDOFF §6).
+  async function openImportPicker(): Promise<void> {
+    if (!window.meshforge?.selectWorkflowFile) {
+      useLogsStore.getState().warn('[workflows] native file dialog unavailable (browser-only run)')
+      return
     }
-    input.click()
+    const picked = await window.meshforge.selectWorkflowFile()
+    if (!picked) return
+    try {
+      const parsed = JSON.parse(picked.content)
+      if (typeof parsed?.id !== 'string' || !Array.isArray(parsed?.nodes)) {
+        throw new Error('Not a valid workflow JSON')
+      }
+      await importWorkflow(parsed)
+    } catch (err) {
+      useLogsStore.getState().error(`import workflow: ${err instanceof Error ? err.message : String(err)}`)
+    }
   }
 
   useEffect(() => {
@@ -758,12 +921,21 @@ export default function WorkflowsPage() {
 
   return (
     <div className="wf-page">
-      <div className="wf-tabs">
+      <div className="wf-tabs" role="tablist">
         {workflows.map((w) => (
           <div
             key={w.id}
             className={`wf-tab ${current?.id === w.id ? 'wf-tab--active' : ''}`}
+            role="tab"
+            aria-selected={current?.id === w.id}
+            tabIndex={current?.id === w.id ? 0 : -1}
             draggable
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                void select(w.id)
+              }
+            }}
             onDragStart={(e) => {
               e.dataTransfer.setData('meshforge/tab-id', w.id)
               e.dataTransfer.effectAllowed = 'move'
@@ -795,16 +967,16 @@ export default function WorkflowsPage() {
             }}
           >
             {dragOverTab === w.id && <span className="wf-tab__drop" />}
-            {w.bookmarked && <span className="wf-tab__star" title="已收藏">★</span>}
+            {w.bookmarked && <span className="wf-tab__star" title={t('workflows.tab.favorited')}>★</span>}
             <span className="wf-tab__name">{w.name}</span>
             {runningWorkflowId === w.id && (
-              <span className="wf-tab__running" title="运行中" />
+              <span className="wf-tab__running" title={t('workflows.tab.running')} />
             )}
             {!busy && (
               <button
                 className="wf-tab__close"
-                title="关闭标签页"
-                aria-label="关闭标签页"
+                title={t('workflows.tab.close')}
+                aria-label={t('workflows.tab.close')}
                 onClick={(e) => {
                   e.stopPropagation()
                   void remove(w.id)
@@ -815,7 +987,7 @@ export default function WorkflowsPage() {
             )}
           </div>
         ))}
-        <button className="wf-tab__add" title="新建工作流 (Ctrl+T)" aria-label="新建工作流 (Ctrl+T)" onClick={() => void create()}>
+        <button className="wf-tab__add" title={t('workflows.tab.new')} aria-label={t('workflows.tab.new')} onClick={() => void create()}>
           +
         </button>
       </div>
@@ -831,7 +1003,7 @@ export default function WorkflowsPage() {
               setTabMenu(null)
             }}
           >
-            打开工作流列表
+            {t('workflows.ctxMenu.openList')}
           </button>
           <button
             className="wf-ctxmenu__item"
@@ -840,7 +1012,7 @@ export default function WorkflowsPage() {
               setTabMenu(null)
             }}
           >
-            复制工作流
+            {t('workflows.ctxMenu.duplicate')}
           </button>
           <button
             className="wf-ctxmenu__item"
@@ -851,7 +1023,7 @@ export default function WorkflowsPage() {
             }}
             disabled={current?.id !== tabMenu.id}
           >
-            导出 JSON
+            {t('workflows.ctxMenu.export')}
           </button>
           <div className="wf-ctxmenu__sep" />
           <button
@@ -861,7 +1033,7 @@ export default function WorkflowsPage() {
               setTabMenu(null)
             }}
           >
-            删除
+            {t('workflows.ctxMenu.delete')}
           </button>
         </div>
       )}
@@ -869,26 +1041,45 @@ export default function WorkflowsPage() {
       <div className="wf-body">
         <div className="wf-main">
           <div className="wf-toolbar">
-            <button className="wf-tool-btn" title="打开工作流" onClick={() => setOpenPopupVisible(true)}>
-              ▣ 打开
+            <button className="wf-tool-btn" title={t('workflows.toolbar.openWorkflow')} onClick={() => setOpenPopupVisible(true)}>
+              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+              </svg>
+              {t('workflows.toolbar.open')}
             </button>
-            <button className="wf-tool-btn" title="导入 JSON" onClick={openImportPicker}>
-              ⬆ 导入
+            <button className="wf-tool-btn" title={t('workflows.toolbar.importJson')} onClick={openImportPicker}>
+              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6" />
+                <polyline points="7 9 12 4 17 9" />
+                <line x1="12" y1="4" x2="12" y2="16" />
+              </svg>
+              {t('workflows.toolbar.import')}
             </button>
             <button
               className="wf-tool-btn"
-              title="导出 JSON"
+              title={t('workflows.toolbar.exportJson')}
               disabled={!current}
               onClick={exportCurrent}
             >
-              ⬇ 导出
+              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6" />
+                <polyline points="7 15 12 20 17 15" />
+                <line x1="12" y1="4" x2="12" y2="16" />
+              </svg>
+              {t('workflows.toolbar.export')}
             </button>
             <span className="wf-toolbar__sep" />
-            <button className="wf-tool-btn" title="撤销 (Ctrl+Z)" aria-label="撤销 (Ctrl+Z)" disabled={!canUndo} onClick={undo}>
-              ↶
+            <button className="wf-tool-btn" title={t('workflows.toolbar.undo')} aria-label={t('workflows.toolbar.undo')} disabled={!canUndo} onClick={undo}>
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7v6h6" />
+                <path d="M21 17a9 9 0 0 0-15-6.7L3 13" />
+              </svg>
             </button>
-            <button className="wf-tool-btn" title="重做 (Ctrl+Y)" aria-label="重做 (Ctrl+Y)" disabled={!canRedo} onClick={redo}>
-              ↷
+            <button className="wf-tool-btn" title={t('workflows.toolbar.redo')} aria-label={t('workflows.toolbar.redo')} disabled={!canRedo} onClick={redo}>
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 7v6h-6" />
+                <path d="M3 17a9 9 0 0 1 15-6.7L21 13" />
+              </svg>
             </button>
 
             {current ? (
@@ -902,7 +1093,7 @@ export default function WorkflowsPage() {
               <span className="wf-toolbar__name">…</span>
             )}
             <span className={`wf-toolbar__dirty ${dirty ? '' : 'wf-toolbar__dirty--saved'}`}>
-              {dirty ? '未保存' : '已保存'}
+              {dirty ? t('workflows.toolbar.unsaved') : t('workflows.toolbar.saved')}
             </span>
 
             <span className="wf-toolbar__spacer" />
@@ -915,35 +1106,48 @@ export default function WorkflowsPage() {
               )}
               {runState === 'paused' && (
                 <button className="primary" onClick={continueRun}>
-                  继续
+                  {t('workflows.toolbar.continue')}
                 </button>
               )}
               {busy ? (
                 <button className="wf-stop-btn" onClick={() => void cancel()}>
-                  ■ 停止
+                  <svg aria-hidden="true" width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="4" y="4" width="16" height="16" rx="1.5" />
+                  </svg>
+                  {t('workflows.toolbar.stop')}
                 </button>
               ) : (
                 <>
                   <button
                     className="wf-run-btn"
                     disabled={!current || current.nodes.length === 0}
-                    title="运行工作流"
+                    title={t('workflows.toolbar.runWorkflow')}
                     onClick={() => void handleRun()}
                   >
-                    ▶ 运行
+                    <svg aria-hidden="true" width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    {t('workflows.toolbar.run')}
                   </button>
-                  <button className="ghost" title="在 Generate 页查看结果" onClick={() => go('generate')}>
-                    查看器 →
+                  <button className="ghost" title={t('workflows.toolbar.viewerTitle')} onClick={() => go('generate')}>
+                    {t('workflows.toolbar.viewer')}
+                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 12h13M13 6l6 6-6 6" />
+                    </svg>
                   </button>
                 </>
               )}
               <button
                 className={`wf-tool-btn ${helpOpen ? 'wf-tool-btn--active' : ''}`}
-                title="工作流使用指南"
-                aria-label="工作流使用指南"
+                title={t('workflows.toolbar.helpTitle')}
+                aria-label={t('workflows.toolbar.helpTitle')}
                 onClick={() => setHelpOpen(true)}
               >
-                ?
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
               </button>
             </div>
           </div>
@@ -953,7 +1157,7 @@ export default function WorkflowsPage() {
               <Canvas />
             </ReactFlowProvider>
           ) : (
-            <div className="wf-empty">加载中…</div>
+            <div className="wf-empty">{t('workflows.loading')}</div>
           )}
         </div>
         <ExtensionsPanel />

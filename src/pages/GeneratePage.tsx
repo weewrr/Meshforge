@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fullUrl, getJob, getWorkflow, listLibrary, processMesh, saveWorkflow, uploadFile } from '../api'
+import { fullUrl, getJob, getWorkflow, importImageByPath, importMeshByPath, listLibrary, processMesh, saveWorkflow } from '../api'
+import ErrorBoundary, { type ErrorBoundaryFallbackProps } from '../components/ErrorBoundary'
 import Viewer3D from '../components/Viewer3D'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useLogsStore } from '../stores/logs'
@@ -9,6 +10,7 @@ import { topoSort, useWorkflowRunStore } from '../stores/workflowRun'
 import { useWorkflowsStore } from '../stores/workflows'
 import type { WFEdge, WFNode, Workflow, WorkflowMeta } from '../types'
 import ChatPanel from './generate/ChatPanel'
+import { getT, useT } from '../i18n'
 import {
   LIBRARY_SORT_OPTIONS,
   describeOpenability,
@@ -41,28 +43,28 @@ function firstPreflightIssue(nodes: WFNode[], edges: WFEdge[]): string | null {
     const label = node.data.label
     const hasIncoming = edges.some((e) => e.target === node.id)
     const params = node.data.params
-    if (node.type === 'imageNode' && !params.url) return `${label}: 未选择图片`
+    if (node.type === 'imageNode' && !params.url) return getT('generate.preflight.noImage', { label })
     if (
       node.type === 'meshNode' &&
       String(params.source ?? 'file') !== 'current' &&
       !params.url
     ) {
-      return `${label}: 未选择网格文件`
+      return getT('generate.preflight.noMeshFile', { label })
     }
     if (
       node.type === 'meshNode' &&
       String(params.source ?? 'file') === 'current' &&
       !useSceneStore.getState().meshUrl
     ) {
-      return `${label}: 3D 查看器中没有当前模型`
+      return getT('generate.preflight.noCurrentModel', { label })
     }
-    if (node.type === 'generatorNode' && !params.generatorId) return `${label}: 未选择生成器`
-    if (node.type === 'generatorNode' && !hasIncoming) return `${label}: 需要上游图片连接`
+    if (node.type === 'generatorNode' && !params.generatorId) return getT('generate.preflight.noGenerator', { label })
+    if (node.type === 'generatorNode' && !hasIncoming) return getT('generate.preflight.needUpstreamImage', { label })
     if (
       (node.type === 'previewNode' || node.type === 'outputNode' || node.type === 'waitNode') &&
       !hasIncoming
     ) {
-      return `${label}: 缺少输入连接`
+      return getT('generate.preflight.missingInput', { label })
     }
   }
   return null
@@ -77,6 +79,7 @@ function WorkflowDropdown({ workflows, value, onChange, disabled }: {
   disabled: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const t = useT()
   const selected = workflows.find((w) => w.id === value)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -90,7 +93,7 @@ function WorkflowDropdown({ workflows, value, onChange, disabled }: {
   }, [open])
 
   if (workflows.length === 0) {
-    return <div className="gp-dropdown__empty">No workflows yet</div>
+    return <div className="gp-dropdown__empty">{t('generate.workflow.noWorkflows')}</div>
   }
 
   return (
@@ -99,18 +102,23 @@ function WorkflowDropdown({ workflows, value, onChange, disabled }: {
         className={`gp-dropdown__btn ${open ? 'gp-dropdown__btn--open' : ''}`}
         onClick={() => setOpen((v) => !v)}
         disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
       >
-        <span className="gp-dropdown__label">{selected?.name ?? 'Select a workflow…'}</span>
+        <span className="gp-dropdown__label">{selected?.name ?? t('generate.workflow.select')}</span>
         <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
           className={`gp-dropdown__chevron ${open ? 'gp-dropdown__chevron--open' : ''}`}>
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
       {open && (
-        <div className="gp-dropdown__list">
+        <div className="gp-dropdown__list" role="listbox">
           {workflows.map((wf, i) => (
             <button
               key={wf.id}
+              role="option"
+              aria-selected={wf.id === value}
+              tabIndex={wf.id === value ? 0 : -1}
               className={`gp-dropdown__item ${i > 0 ? 'gp-dropdown__item--sep' : ''} ${wf.id === value ? 'gp-dropdown__item--active' : ''}`}
               onClick={() => { onChange(wf.id); setOpen(false) }}
             >
@@ -128,27 +136,32 @@ function WorkflowDropdown({ workflows, value, onChange, disabled }: {
 type PatchFn = (nodeId: string, patch: Record<string, unknown>) => void
 
 function ImageParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
+  const t = useT()
   const url = String(node.data.params.url ?? '')
   const [busy, setBusy] = useState(false)
 
-  async function pick(file: File | undefined): Promise<void> {
-    if (!file) return
+  // Native-dialog image picker (Modly-aligned), same flow as MeshParamRow: the
+  // Electron main process opens the dialog and only returns an absolute path;
+  // the backend copies the file into workspace/uploads via /upload/from-path.
+  // No <input type=file> → no renderer freeze.
+  async function pickFromDisk(): Promise<void> {
+    if (!window.meshforge?.selectImageFile) {
+      useLogsStore.getState().warn(getT('generate.log.imageDialogUnavailable'))
+      return
+    }
+    const filePath = await window.meshforge.selectImageFile()
+    if (!filePath) return
     setBusy(true)
     try {
-      const { url: uploaded, fileName } = await uploadFile(file)
-      onPatch(node.id, { url: uploaded, fileName })
+      const { url: imported, fileName } = await importImageByPath(filePath)
+      onPatch(node.id, { url: imported, fileName })
+      useLogsStore.getState().log('info', getT('generate.log.imageImported', { name: fileName }))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      useLogsStore.getState().error(getT('generate.log.imageImportFailed', { detail: msg }))
     } finally {
       setBusy(false)
     }
-  }
-
-  // Imperative file input — see openMeshPicker() in the page component.
-  function pickFromDisk(): void {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*'
-    input.onchange = () => { void pick(input.files?.[0]) }
-    input.click()
   }
 
   return (
@@ -158,12 +171,12 @@ function ImageParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
           <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" />
           <polyline points="21 15 16 10 5 21" />
         </svg>
-        <span>Image</span>
+        <span>{t('generate.image.label')}</span>
       </div>
       {url ? (
         <button className="gp-image" onClick={pickFromDisk} disabled={busy}>
           <img src={fullUrl(url)} alt="" />
-          <span className="gp-image__change">{busy ? 'Uploading…' : 'Change…'}</span>
+          <span className="gp-image__change">{busy ? t('generate.common.uploading') : t('generate.common.change')}</span>
         </button>
       ) : (
         <button className="gp-image gp-image--empty" onClick={pickFromDisk} disabled={busy}>
@@ -171,7 +184,7 @@ function ImageParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
             <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" />
             <polyline points="21 15 16 10 5 21" />
           </svg>
-          <span>{busy ? 'Uploading…' : 'Browse image…'}</span>
+          <span>{busy ? t('generate.common.uploading') : t('generate.image.browse')}</span>
         </button>
       )}
     </div>
@@ -179,6 +192,7 @@ function ImageParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
 }
 
 function TextParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
+  const t = useT()
   const text = String(node.data.params.text ?? '')
   return (
     <div className="gp-row__body">
@@ -186,13 +200,13 @@ function TextParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
         <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2">
           <path d="M17 6.1H3M21 12.1H3M15.1 18H3" />
         </svg>
-        <span>Text</span>
+        <span>{t('generate.text.label')}</span>
       </div>
       <textarea
         className="gp-textarea"
         value={text}
         rows={3}
-        placeholder="Enter text…"
+        placeholder={t('generate.text.placeholder')}
         onChange={(e) => onPatch(node.id, { text: e.target.value })}
       />
     </div>
@@ -200,28 +214,34 @@ function TextParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
 }
 
 function MeshParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
+  const t = useT()
   const url = String(node.data.params.url ?? '')
   const fileName = String(node.data.params.fileName ?? '')
   const [busy, setBusy] = useState(false)
 
-  async function pick(file: File | undefined): Promise<void> {
-    if (!file) return
+  // Native-dialog mesh picker (Modly-aligned). The Electron main process opens
+  // the file dialog and only returns an absolute path; the backend serves /
+  // converts the file via /optimize/import-by-path. No <input type=file> →
+  // no renderer freeze (same flow as the toolbar Import→Mesh).
+  async function pickFromDisk(): Promise<void> {
+    if (!window.meshforge?.selectMeshFile) {
+      useLogsStore.getState().warn(getT('generate.log.meshDialogUnavailable'))
+      return
+    }
+    const filePath = await window.meshforge.selectMeshFile()
+    if (!filePath) return
     setBusy(true)
     try {
-      const { url: uploaded, fileName: name } = await uploadFile(file)
-      onPatch(node.id, { url: uploaded, fileName: name })
+      const { url: imported } = await importMeshByPath(filePath)
+      const name = filePath.split(/[\\/]/).pop() ?? filePath
+      onPatch(node.id, { url: imported, fileName: name })
+      useLogsStore.getState().log('info', getT('generate.log.meshImported', { name }))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      useLogsStore.getState().error(getT('generate.log.meshImportFailed', { detail: msg }))
     } finally {
       setBusy(false)
     }
-  }
-
-  // Imperative file input — see openMeshPicker() in the page component.
-  function pickFromDisk(): void {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.glb,.gltf'
-    input.onchange = () => { void pick(input.files?.[0]) }
-    input.click()
   }
 
   const source = String(node.data.params.source ?? 'file') === 'current' ? 'current' : 'file'
@@ -232,7 +252,7 @@ function MeshParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
         <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2">
           <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
         </svg>
-        <span>Load 3D Mesh</span>
+        <span>{t('generate.mesh.label')}</span>
       </div>
 
       {/* Toggle: use current model */}
@@ -241,36 +261,37 @@ function MeshParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
         onClick={() => onPatch(node.id, { source: source === 'current' ? 'file' : 'current' })}
       >
         <span className="gp-toggle__knob" />
-        <span className="gp-toggle__text">Use current model</span>
+        <span className="gp-toggle__text">{t('generate.mesh.useCurrent')}</span>
       </button>
 
       {source === 'file' ? (
         <>
           {url ? (
-            <button className="gp-file" onClick={pickFromDisk} disabled={busy}>
+            <button className="gp-file" onClick={() => void pickFromDisk()} disabled={busy}>
               <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
               <span className="gp-file__name">{fileName}</span>
-              <span className="gp-file__change">{busy ? '…' : 'Change…'}</span>
+              <span className="gp-file__change">{busy ? '…' : t('generate.common.change')}</span>
             </button>
           ) : (
-            <button className="gp-file gp-file--empty" onClick={pickFromDisk} disabled={busy}>
+            <button className="gp-file gp-file--empty" onClick={() => void pickFromDisk()} disabled={busy}>
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
-              <span>{busy ? 'Uploading…' : 'Browse mesh…'}</span>
+              <span>{busy ? t('generate.common.importing') : t('generate.mesh.browse')}</span>
             </button>
           )}
         </>
       ) : (
-        <div className="gp-file__hint">Uses the model currently loaded in the 3D viewer</div>
+        <div className="gp-file__hint">{t('generate.mesh.useCurrentHint')}</div>
       )}
     </div>
   )
 }
 
 function WaitParamRow({ nodeId }: { nodeId: string }) {
+  const t = useT()
   const nodeState = useWorkflowRunStore((s) => s.nodeStates[nodeId])
   const continueRun = useWorkflowRunStore((s) => s.continueRun)
   const waiting = nodeState === 'waiting'
@@ -281,23 +302,24 @@ function WaitParamRow({ nodeId }: { nodeId: string }) {
         <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2">
           <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
         </svg>
-        <span>Wait</span>
+        <span>{t('generate.wait.label')}</span>
       </div>
       {waiting ? (
         <button className="gp-continue" onClick={continueRun}>
           <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
             <polygon points="5 3 19 12 5 21 5 3" />
           </svg>
-          Continue
+          {t('generate.wait.continue')}
         </button>
       ) : (
-        <p className="gp-hint">Pauses the workflow until you click Continue.</p>
+        <p className="gp-hint">{t('generate.wait.hint')}</p>
       )}
     </div>
   )
 }
 
 function GeneratorParamRow({ node }: { node: WFNode }) {
+  const t = useT()
   const nodeState = useWorkflowRunStore((s) => s.nodeStates[node.id])
   const progress = useWorkflowRunStore((s) => s.nodeProgress[node.id] ?? 0)
   const generatorId = String(node.data.params.generatorId ?? '')
@@ -308,11 +330,11 @@ function GeneratorParamRow({ node }: { node: WFNode }) {
         <div className="gp-ext__info">
           <p className="gp-ext__name">{node.data.label}</p>
           <div className="gp-ext__types">
-            <span style={{ color: '#38bdf8' }}>image</span>
+            <span style={{ color: '#38bdf8' }}>{t('generate.param.typeImage')}</span>
             <svg aria-hidden="true" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
             </svg>
-            <span style={{ color: '#a78bfa' }}>mesh</span>
+            <span style={{ color: '#a78bfa' }}>{t('generate.param.typeMesh')}</span>
           </div>
         </div>
         {generatorId && <span className="gp-ext__id">{generatorId}</span>}
@@ -334,6 +356,7 @@ function LightPopover({ settings, onChange, onClose }: {
   onChange: (patch: Partial<LightSettings>) => void
   onClose: () => void
 }) {
+  const t = useT()
   const trapRef = useFocusTrap<HTMLDivElement>(true, onClose)
   function row(label: string, key: keyof LightSettings, max: number) {
     const value = settings[key]
@@ -345,6 +368,7 @@ function LightPopover({ settings, onChange, onClose }: {
         </div>
         <input
           type="range"
+          aria-label={label}
           min={0}
           max={max}
           step={0.05}
@@ -358,13 +382,13 @@ function LightPopover({ settings, onChange, onClose }: {
   return (
     <div ref={trapRef} className="gp-pop">
       <div className="gp-pop__head">
-        <p className="gp-pop__title">Lighting</p>
-        <button className="gp-pop__reset" onClick={() => onChange(DEFAULT_LIGHT)}>Reset</button>
+        <p className="gp-pop__title">{t('generate.light.title')}</p>
+        <button className="gp-pop__reset" onClick={() => onChange(DEFAULT_LIGHT)}>{t('generate.light.reset')}</button>
       </div>
-      {row('Ambient', 'ambient', 1.5)}
-      {row('Sun', 'main', 4)}
-      {row('Fill', 'fill', 2)}
-      <button className="gp-pop__close" onClick={onClose}>Close</button>
+      {row(t('generate.light.ambient'), 'ambient', 1.5)}
+      {row(t('generate.light.sun'), 'main', 4)}
+      {row(t('generate.light.fill'), 'fill', 2)}
+      <button className="gp-pop__close" onClick={onClose}>{t('generate.common.close')}</button>
     </div>
   )
 }
@@ -372,6 +396,7 @@ function LightPopover({ settings, onChange, onClose }: {
 // ─── HUD 浮层（进度/耗时/错误） ──────────────────────────────────────────────
 
 function GenerationHUD({ nodes }: { nodes: WFNode[] }) {
+  const t = useT()
   const runState = useWorkflowRunStore((s) => s.runState)
   const activeNodeId = useWorkflowRunStore((s) => s.activeNodeId)
   const nodeStates = useWorkflowRunStore((s) => s.nodeStates)
@@ -406,7 +431,7 @@ function GenerationHUD({ nodes }: { nodes: WFNode[] }) {
             <div className="gp-hud__top">
               <div className="gp-hud__label">
                 <span className="gp-hud__dot" style={runState === 'paused' ? { background: '#fbbf24' } : undefined} />
-                <span>{runState === 'paused' ? 'Waiting for input' : (activeLabel ?? 'Generating 3D mesh…')}</span>
+                <span>{runState === 'paused' ? t('generate.hud.waitingInput') : (activeLabel ?? t('generate.hud.generating'))}</span>
               </div>
               <span className="gp-hud__time">{formatElapsed(elapsed)}</span>
             </div>
@@ -414,7 +439,7 @@ function GenerationHUD({ nodes }: { nodes: WFNode[] }) {
               <div className="gp-hud__fill" style={{ width: `${overall}%` }} />
             </div>
             <div className="gp-hud__sub">
-              <span>{runState === 'paused' ? 'Click Continue on the Wait node' : `${done}/${nodes.length} nodes`}</span>
+              <span>{runState === 'paused' ? t('generate.hud.pausedHint') : t('generate.hud.nodesDone', { done, total: nodes.length })}</span>
               <span className="gp-hud__pct">{overall}%</span>
             </div>
           </>
@@ -427,11 +452,11 @@ function GenerationHUD({ nodes }: { nodes: WFNode[] }) {
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </span>
-              <span>Generation failed</span>
+              <span>{t('generate.hud.failed')}</span>
             </div>
             <pre className="gp-hud__errortext">{lastError}</pre>
             <div className="gp-hud__actions">
-              <button className="gp-hud__retry" onClick={reset}>Try again</button>
+              <button className="gp-hud__retry" onClick={reset}>{t('generate.hud.retry')}</button>
               {lastError && (
                 <button
                   className="gp-hud__copy"
@@ -441,7 +466,7 @@ function GenerationHUD({ nodes }: { nodes: WFNode[] }) {
                     setTimeout(() => setCopied(false), 2000)
                   }}
                 >
-                  {copied ? 'Copied' : 'Copy'}
+                  {copied ? t('generate.hud.copied') : t('generate.hud.copy')}
                 </button>
               )}
             </div>
@@ -471,11 +496,58 @@ function Spinner() {
 }
 
 const EXPORT_FORMATS = [
-  { fmt: 'glb' as const, desc: 'Binary glTF' },
-  { fmt: 'obj' as const, desc: 'Wavefront' },
-  { fmt: 'stl' as const, desc: '3D Print' },
-  { fmt: 'ply' as const, desc: 'Polygon File' }
+  { fmt: 'glb' as const, descKey: 'generate.export.formatGlb' },
+  { fmt: 'obj' as const, descKey: 'generate.export.formatObj' },
+  { fmt: 'stl' as const, descKey: 'generate.export.formatStl' },
+  { fmt: 'ply' as const, descKey: 'generate.export.formatPly' }
 ]
+
+const SORT_LABEL_KEYS: Record<LibrarySortMode, string> = {
+  type: 'generate.library.sortType',
+  name: 'generate.library.sortName',
+  date: 'generate.library.sortDate'
+}
+
+const SCOPE_LABEL_KEYS: Record<string, string> = {
+  workflows: 'generate.library.scopeWorkflows',
+  exports: 'generate.library.scopeExports'
+}
+
+const CAPABILITY_LABEL_KEYS: Record<string, string> = {
+  mesh: 'generate.library.capMesh',
+  'rigged-mesh': 'generate.library.capRiggedMesh',
+  'animation-motion': 'generate.library.capAnimationMotion',
+  'landmarks-sidecar': 'generate.library.capLandmarksSidecar',
+  'generated-world': 'generate.library.capGeneratedWorld',
+  'scene-manifest': 'generate.library.capSceneManifest'
+}
+
+// ─── Viewer 加载失败兜底 ────────────────────────────────────────────────────
+
+function ViewerLoadError({ error }: { error: Error }) {
+  const t = useT()
+  const undoMesh = useSceneStore((s) => s.undoMesh)
+  const setMesh = useSceneStore((s) => s.setMesh)
+  const canUndo = useSceneStore((s) => s.historyIndex > 0)
+  return (
+    <div className="gp-viewer__empty eb-viewer">
+      <svg className="eb-app__icon" aria-hidden="true" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+        <line x1="12" y1="12" x2="12" y2="16" />
+      </svg>
+      <span className="eb-viewer__title">{t('generate.viewer.failedToLoad')}</span>
+      <span className="eb-viewer__msg">
+        {t('generate.viewer.errorMsg', { msg: error.message || String(error) })}
+      </span>
+      <div className="eb-viewer__actions">
+        <button className="eb-btn" onClick={() => setMesh(null)}>{t('generate.viewer.clearModel')}</button>
+        {canUndo && (
+          <button className="eb-btn eb-btn--primary" onClick={undoMesh}>{t('generate.viewer.undo')}</button>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ─── 主页面 ────────────────────────────────────────────────────────────────
 
@@ -529,6 +601,7 @@ export default function GeneratePage() {
 
   const busy = runState === 'running' || runState === 'paused'
   const hasModel = !!meshUrl
+  const t = useT()
 
   useEffect(() => {
     if (!loaded) void loadList()
@@ -583,7 +656,7 @@ export default function GeneratePage() {
   function handleOpenLibraryAsset(entry: LibraryEntry | null): void {
     if (!entry || !isOpenable(entry)) return
     pushMeshUrl(fullUrl(entry.url))
-    useLogsStore.getState().info(`library open: ${entry.workspacePath}`)
+    useLogsStore.getState().info(getT('generate.log.libraryOpen', { path: entry.workspacePath }))
     setOpenPanel(null)
   }
 
@@ -694,48 +767,51 @@ export default function GeneratePage() {
         status = await getJob(job_id)
       }
       if (status.state !== 'succeeded' || !status.result_url) {
-        useLogsStore.getState().error(`export .${format}: ${status.error || status.state}`)
+        useLogsStore.getState().error(getT('generate.log.exportError', { format, detail: status.error || status.state }))
         return
       }
       const a = document.createElement('a')
       a.href = fullUrl(status.result_url)
       a.download = `meshforge-${Date.now()}.${format}`
       a.click()
-      useLogsStore.getState().info(`export .${format}: saved`)
+      useLogsStore.getState().info(getT('generate.log.exportSaved', { format }))
     } catch (e) {
-      useLogsStore.getState().error(`export .${format}: ${e instanceof Error ? e.message : String(e)}`)
+      useLogsStore.getState().error(getT('generate.log.exportError', { format, detail: e instanceof Error ? e.message : String(e) }))
     } finally {
       setExporting(null)
     }
   }
 
-  async function handleImportMesh(file: File | undefined): Promise<void> {
-    if (!file) return
+  // Import mesh through the Electron main process (native dialog → filesystem
+  // path → backend serves the file). Modly-aligned: this avoids Chromium's
+  // <input type=file> entirely, which is documented to freeze this machine's
+  // renderer, and avoids shipping file bytes through the renderer.
+  async function handleImportMesh(): Promise<void> {
+    if (!window.meshforge?.selectMeshFile) {
+      useLogsStore.getState().warn(getT('generate.log.importNativeUnavailable'))
+      return
+    }
+    const filePath = await window.meshforge.selectMeshFile()
+    if (!filePath) return
+    setOpenPanel(null)
     setImporting(true)
+    useLogsStore.getState().info(getT('generate.log.importPicked', { file: filePath }))
     try {
-      pushMeshUrl(URL.createObjectURL(file))
-      setOpenPanel(null)
+      const { url } = await importMeshByPath(filePath)
+      pushMeshUrl(fullUrl(url))
+      useLogsStore.getState().info(getT('generate.log.importPushed', { url: fullUrl(url) }))
+    } catch (e) {
+      useLogsStore.getState().error(getT('generate.log.importFailed', { detail: e instanceof Error ? e.message : String(e) }))
     } finally {
       setImporting(false)
     }
-  }
-
-  // Imperative file input: committing a hidden <input type="file"> through React
-  // freezes the renderer on some Electron/Chromium builds. Create the element
-  // only when the user actually picks a file instead.
-  function openMeshPicker(): void {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.glb,.gltf'
-    input.onchange = () => { void handleImportMesh(input.files?.[0]) }
-    input.click()
   }
 
   function handleDecimate(targetFaces: number): void {
     setDecimating(true)
     setTimeout(() => {
       setDecimating(false)
-      useLogsStore.getState().error(`decimate to ${targetFaces} faces: backend endpoint not available yet`)
+      useLogsStore.getState().error(getT('generate.log.decimateUnavailable', { target: targetFaces }))
     }, 500)
   }
 
@@ -743,7 +819,7 @@ export default function GeneratePage() {
     setSmoothing(true)
     setTimeout(() => {
       setSmoothing(false)
-      useLogsStore.getState().error(`smooth (${iterations} iterations): backend endpoint not available yet`)
+      useLogsStore.getState().error(getT('generate.log.smoothUnavailable', { iterations }))
     }, 500)
   }
 
@@ -780,9 +856,10 @@ export default function GeneratePage() {
               <button
                 key={m}
                 className={`gp-mode__btn ${mode === m ? 'gp-mode__btn--active' : ''}`}
+                aria-pressed={mode === m}
                 onClick={() => setMode(m)}
               >
-                {m}
+                {t(m === 'basic' ? 'generate.mode.basic' : 'generate.mode.chat')}
               </button>
             ))}
           </div>
@@ -793,7 +870,7 @@ export default function GeneratePage() {
         ) : (
           <>
             <div className="gp-panel__header">
-              <h2 className="gp-panel__title">Workflow</h2>
+              <h2 className="gp-panel__title">{t('generate.panel.title')}</h2>
               <div className="gp-panel__selectrow">
                 <WorkflowDropdown
                   workflows={workflows}
@@ -802,8 +879,8 @@ export default function GeneratePage() {
                   disabled={busy}
                 />
                 {selectedId && (
-                  <button className="gp-edit" title="Edit workflow" aria-label="Edit workflow" onClick={openEditor}>
-                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <button className="gp-edit" title={t('generate.actions.editWorkflow')} aria-label={t('generate.actions.editWorkflow')} onClick={openEditor}>
+                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b93a7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                     </svg>
@@ -828,19 +905,19 @@ export default function GeneratePage() {
                   <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
                   </svg>
-                  <p>工作流中没有可配置的节点。</p>
+                  <p>{t('generate.empty.noConfigurableNodes')}</p>
                   <button className="gp-params__link" onClick={openEditor}>
                     <svg aria-hidden="true" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                     </svg>
-                    Open workflow editor
+                    {t('generate.empty.openEditor')}
                   </button>
                 </div>
               )}
               {!workflow && (
                 <div className="gp-params__empty">
-                  <p>No workflows yet.<br />Create one in the Workflows tab.</p>
+                  <p>{t('generate.empty.noWorkflows')}<br />{t('generate.empty.createWorkflowTab')}</p>
                 </div>
               )}
             </div>
@@ -857,14 +934,14 @@ export default function GeneratePage() {
                 </div>
               )}
               {busy ? (
-                <button className="gp-generate gp-generate--stop" onClick={() => void cancel()}>Stop</button>
+                <button className="gp-generate gp-generate--stop" onClick={() => void cancel()}>{t('generate.actions.stop')}</button>
               ) : (
                 <button
                   className="gp-generate"
                   disabled={!workflow || nodes.length === 0 || !!preflightIssue}
                   onClick={handleGenerate}
                 >
-                  Generate 3D Model
+                  {t('generate.actions.generate')}
                 </button>
               )}
             </div>
@@ -880,23 +957,23 @@ export default function GeneratePage() {
         {/* 顶部工具栏 */}
         <div className="gp-toolbar">
           {/* Free memory */}
-          <button className="gp-toolbtn" onClick={handleUnloadAll} disabled={busy} title="Free model from memory">
+          <button className="gp-toolbtn" onClick={handleUnloadAll} disabled={busy} title={t('generate.actions.freeModelTitle')}>
             <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
               <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
             </svg>
-            {unloadStatus === 'done' ? 'Freed' : 'Free memory'}
+            {unloadStatus === 'done' ? t('generate.actions.freed') : t('generate.actions.freeMemory')}
           </button>
 
           <div className="gp-toolbar__sep" />
 
           {/* Undo / Redo */}
-          <button className="gp-toolbtn gp-toolbtn--icon" onClick={undoMesh} disabled={!canUndoMesh} title="Undo (Ctrl+Z)" aria-label="Undo (Ctrl+Z)">
+          <button className="gp-toolbtn gp-toolbtn--icon" onClick={undoMesh} disabled={!canUndoMesh} title={t('generate.actions.undo')} aria-label={t('generate.actions.undo')}>
             <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
               <path d="M3 7v6h6" />
               <path d="M3 13a9 9 0 1 0 2.28-5.93" />
             </svg>
           </button>
-          <button className="gp-toolbtn gp-toolbtn--icon" onClick={redoMesh} disabled={!canRedoMesh} title="Redo (Ctrl+Y)" aria-label="Redo (Ctrl+Y)">
+          <button className="gp-toolbtn gp-toolbtn--icon" onClick={redoMesh} disabled={!canRedoMesh} title={t('generate.actions.redo')} aria-label={t('generate.actions.redo')}>
             <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
               <path d="M21 7v6h-6" />
               <path d="M21 13a9 9 0 1 1-2.28-5.93" />
@@ -919,18 +996,18 @@ export default function GeneratePage() {
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
               )}
-              {importing ? 'Importing…' : 'Import'}
+              {importing ? t('generate.import.importing') : t('generate.import.title')}
               {!importing && <ChevronDown />}
             </button>
             {openPanel === 'import' && (
               <div className="gp-menu">
-                <button onClick={openMeshPicker}>
+                <button onClick={() => void handleImportMesh()}>
                   <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
                     <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                   </svg>
                   <span>
-                    <span className="gp-menu__title">Mesh</span>
-                    <span className="gp-menu__desc">.glb .gltf</span>
+                    <span className="gp-menu__title">{t('generate.import.mesh')}</span>
+                    <span className="gp-menu__desc">{t('generate.import.formats')}</span>
                   </span>
                 </button>
               </div>
@@ -946,7 +1023,7 @@ export default function GeneratePage() {
               <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
                 <path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h10" />
               </svg>
-              Library
+              {t('generate.library.title')}
             </button>
             {openPanel === 'library' && (() => {
               const scopeGroups = filterScopeGroups(libraryEntries, librarySearch, librarySort)
@@ -961,20 +1038,20 @@ export default function GeneratePage() {
               const selectedMessage = selectedEntry
                 ? describeOpenability(selectedEntry)
                 : scopeGroups.length === 0 && librarySearch.trim()
-                  ? `No workspace assets match "${librarySearch.trim()}".`
-                  : 'Select an asset to open it in Generate.'
+                  ? t('generate.library.noMatch', { query: librarySearch.trim() })
+                  : t('generate.library.selectHint')
               return (
                 <div className="gp-menu gp-menu--wide gp-lib">
                   <div className="gp-menu__head">
-                    <p className="gp-menu__label">Workspace library</p>
-                    <p className="gp-menu__text">Select a workspace asset and open the supported source in Generate.</p>
+                    <p className="gp-menu__label">{t('generate.library.workspaceTitle')}</p>
+                    <p className="gp-menu__text">{t('generate.library.workspaceDesc')}</p>
                   </div>
                   <button
                     className="gp-lib__refresh"
                     onClick={() => void loadLibrary(true)}
                     disabled={libraryLoading}
                   >
-                    Refresh assets
+                    {t('generate.library.refresh')}
                   </button>
                   <div className="gp-lib__bar">
                     <input
@@ -982,7 +1059,7 @@ export default function GeneratePage() {
                       type="search"
                       value={librarySearch}
                       onChange={(e) => setLibrarySearch(e.target.value)}
-                      placeholder="Search by name, path, scope, or capability"
+                      placeholder={t('generate.library.searchPlaceholder')}
                     />
                     <select
                       className="gp-lib__sort"
@@ -990,17 +1067,17 @@ export default function GeneratePage() {
                       onChange={(e) => setLibrarySort(e.target.value as LibrarySortMode)}
                     >
                       {LIBRARY_SORT_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        <option key={opt.value} value={opt.value}>{t(SORT_LABEL_KEYS[opt.value])}</option>
                       ))}
                     </select>
                   </div>
                   {libraryLoading ? (
-                    <p className="gp-menu__empty">Loading workspace assets…</p>
+                    <p className="gp-menu__empty">{t('generate.library.loading')}</p>
                   ) : scopeGroups.length === 0 ? (
                     <p className="gp-menu__empty">
                       {librarySearch.trim()
-                        ? `No workspace assets match "${librarySearch.trim()}".`
-                        : 'No workspace assets are indexed yet.'}
+                        ? t('generate.library.noMatch', { query: librarySearch.trim() })
+                        : t('generate.library.noIndexed')}
                     </p>
                   ) : (
                     <div className="gp-lib__list">
@@ -1013,8 +1090,8 @@ export default function GeneratePage() {
                               aria-expanded={scopeExpanded}
                               onClick={() => setLibraryCollapsed((keys) => toggleSectionKey(keys, scopeGroup.sectionKey))}
                             >
-                              <span className="gp-lib__section-name">{scopeGroup.sourceScopeLabel}</span>
-                              <span className="gp-lib__section-toggle">{scopeExpanded ? 'Hide' : 'Show'}</span>
+                              <span className="gp-lib__section-name">{t(SCOPE_LABEL_KEYS[scopeGroup.sourceScope] ?? scopeGroup.sourceScopeLabel)}</span>
+                              <span className="gp-lib__section-toggle">{scopeExpanded ? t('generate.library.hide') : t('generate.library.show')}</span>
                             </button>
                             {scopeExpanded && scopeGroup.entryGroups.map((group) => {
                               const capExpanded = !libraryCollapsed.includes(group.sectionKey)
@@ -1025,8 +1102,8 @@ export default function GeneratePage() {
                                     aria-expanded={capExpanded}
                                     onClick={() => setLibraryCollapsed((keys) => toggleSectionKey(keys, group.sectionKey))}
                                   >
-                                    <span className="gp-lib__section-name">{group.capabilityLabel}</span>
-                                    <span className="gp-lib__section-toggle">{capExpanded ? 'Hide' : 'Show'}</span>
+                                    <span className="gp-lib__section-name">{t(CAPABILITY_LABEL_KEYS[group.capability] ?? group.capabilityLabel)}</span>
+                                    <span className="gp-lib__section-toggle">{capExpanded ? t('generate.library.hide') : t('generate.library.show')}</span>
                                   </button>
                                   {capExpanded && group.entries.map((entry) => {
                                     const selected = entry.id === librarySelectedId
@@ -1060,7 +1137,7 @@ export default function GeneratePage() {
                     disabled={openDisabled}
                     onClick={() => handleOpenLibraryAsset(selectedEntry)}
                   >
-                    Open selected asset
+                    {t('generate.library.openSelected')}
                   </button>
                 </div>
               )
@@ -1083,19 +1160,19 @@ export default function GeneratePage() {
                     <polyline points="7 10 12 5 17 10" />
                     <line x1="12" y1="5" x2="12" y2="15" />
                   </svg>
-                  {exporting ? `Exporting .${exporting}…` : 'Export'}
+                  {exporting ? t('generate.export.exportingFmt', { fmt: exporting }) : t('generate.export.title')}
                   <ChevronDown />
                 </button>
                 {openPanel === 'export' && (
                   <div className="gp-menu">
-                    {EXPORT_FORMATS.map(({ fmt, desc }) => (
+                    {EXPORT_FORMATS.map(({ fmt, descKey }) => (
                       <button
                         key={fmt}
                         disabled={exporting !== null}
                         onClick={() => { void handleExport(fmt); setOpenPanel(null) }}
                       >
                         <span className="gp-menu__fmt">.{fmt}</span>
-                        <span className="gp-menu__desc">{exporting === fmt ? 'Exporting…' : desc}</span>
+                        <span className="gp-menu__desc">{exporting === fmt ? t('generate.export.processing') : t(descKey)}</span>
                       </button>
                     ))}
                   </div>
@@ -1115,7 +1192,7 @@ export default function GeneratePage() {
                       <circle cx="12" cy="12" r="3" />
                     </svg>
                   )}
-                  {smoothing ? 'Processing…' : 'Smooth'}
+                  {smoothing ? t('generate.common.processing') : t('generate.smooth.title')}
                 </button>
                 {openPanel === 'smooth' && (
                   <SmoothPopover smoothing={smoothing} onSmooth={handleSmooth} onClose={() => setOpenPanel(null)} />
@@ -1137,7 +1214,7 @@ export default function GeneratePage() {
                       <line x1="8" y1="17" x2="16" y2="17" />
                     </svg>
                   )}
-                  {decimating ? 'Processing…' : 'Decimate'}
+                  {decimating ? t('generate.common.processing') : t('generate.decimate.title')}
                 </button>
                 {openPanel === 'decimate' && (
                   <DecimatePopover
@@ -1157,8 +1234,8 @@ export default function GeneratePage() {
           <div className="gp-relative">
             <button
               className={`gp-toolbtn gp-toolbtn--icon ${openPanel === 'light' ? 'gp-toolbtn--active' : ''}`}
-              title="Lighting"
-              aria-label="Lighting"
+              title={t('generate.light.title')}
+              aria-label={t('generate.light.title')}
               onClick={() => setOpenPanel((p) => (p === 'light' ? null : 'light'))}
             >
               <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
@@ -1185,8 +1262,8 @@ export default function GeneratePage() {
             <>
               <button
                 className={`gp-tools__btn ${gizmoMode === 'translate' ? 'gp-tools__btn--active' : ''}`}
-                title="Move (W)"
-                aria-label="Move (W)"
+                title={t('generate.tools.move')}
+                aria-label={t('generate.tools.move')}
                 onClick={() => setGizmoMode(gizmoMode === 'translate' ? null : 'translate')}
               >
                 <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
@@ -1197,8 +1274,8 @@ export default function GeneratePage() {
               </button>
               <button
                 className={`gp-tools__btn ${gizmoMode === 'rotate' ? 'gp-tools__btn--active' : ''}`}
-                title="Rotate (R)"
-                aria-label="Rotate (R)"
+                title={t('generate.tools.rotate')}
+                aria-label={t('generate.tools.rotate')}
                 onClick={() => setGizmoMode(gizmoMode === 'rotate' ? null : 'rotate')}
               >
                 <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
@@ -1208,8 +1285,8 @@ export default function GeneratePage() {
               </button>
               <button
                 className={`gp-tools__btn ${gizmoMode === 'scale' ? 'gp-tools__btn--active' : ''}`}
-                title="Scale (S)"
-                aria-label="Scale (S)"
+                title={t('generate.tools.scale')}
+                aria-label={t('generate.tools.scale')}
                 onClick={() => setGizmoMode(gizmoMode === 'scale' ? null : 'scale')}
               >
                 <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
@@ -1222,16 +1299,14 @@ export default function GeneratePage() {
         </div>
 
         <div className="gp-viewer">
-          {meshUrl ? (
+          <ErrorBoundary
+            label="Viewer3D"
+            fallback={({ error }: ErrorBoundaryFallbackProps) => <ViewerLoadError error={error} />}
+          >
+            {/* Always mounted: with no model the empty state (persistent ground
+                grid + hint overlay) lives inside Viewer3D, modly parity. */}
             <Viewer3D url={meshUrl} light={light} />
-          ) : (
-            <div className="gp-viewer__empty">
-              <svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-              <span>Generate a model to preview it here</span>
-            </div>
-          )}
+          </ErrorBoundary>
           <GenerationHUD nodes={nodes} />
         </div>
       </div>
@@ -1246,22 +1321,23 @@ function SmoothPopover({ smoothing, onSmooth, onClose }: {
   onSmooth: (iterations: number) => void
   onClose: () => void
 }) {
+  const t = useT()
   const [inputValue, setInputValue] = useState('3')
   const parsed = parseInt(inputValue, 10)
   const valid = !isNaN(parsed) && parsed >= 1 && parsed <= 20
 
   return (
     <div className="gp-pop gp-pop--left">
-      <p className="gp-pop__title">Smooth mesh</p>
+      <p className="gp-pop__title">{t('generate.smooth.popupTitle')}</p>
       <div className="gp-pop__field">
-        <label className="gp-pop__fieldlabel">Iterations (1–20)</label>
-        <input type="number" min={1} max={20} step={1} value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
-        <p className="gp-pop__fieldhint">More iterations = smoother, but loses detail</p>
+        <label className="gp-pop__fieldlabel" htmlFor="gp-smooth-iterations">{t('generate.smooth.iterationsLabel')}</label>
+        <input id="gp-smooth-iterations" type="number" min={1} max={20} step={1} value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
+        <p className="gp-pop__fieldhint">{t('generate.smooth.iterationsHint')}</p>
       </div>
       <div className="gp-pop__actions">
-        <button className="gp-pop__cancel" onClick={onClose}>Cancel</button>
+        <button className="gp-pop__cancel" onClick={onClose}>{t('generate.common.cancel')}</button>
         <button className="gp-pop__apply" disabled={smoothing || !valid} onClick={() => valid && onSmooth(parsed)}>
-          {smoothing ? 'Processing…' : 'Apply'}
+          {smoothing ? t('generate.common.processing') : t('generate.common.apply')}
         </button>
       </div>
     </div>
@@ -1274,6 +1350,7 @@ function DecimatePopover({ currentTriangles, decimating, onDecimate, onClose }: 
   onDecimate: (targetFaces: number) => void
   onClose: () => void
 }) {
+  const t = useT()
   const defaultTarget = currentTriangles ? Math.round(currentTriangles * 0.5) : 5000
   const [inputValue, setInputValue] = useState(String(defaultTarget))
   const parsed = parseInt(inputValue, 10)
@@ -1285,21 +1362,21 @@ function DecimatePopover({ currentTriangles, decimating, onDecimate, onClose }: 
 
   return (
     <div className="gp-pop gp-pop--left">
-      <p className="gp-pop__title">Decimate mesh</p>
+      <p className="gp-pop__title">{t('generate.decimate.popupTitle')}</p>
       {currentTriangles && (
-        <p className="gp-pop__fieldhint">Current: {currentTriangles.toLocaleString()} tri</p>
+        <p className="gp-pop__fieldhint">{t('generate.decimate.currentTri', { current: currentTriangles.toLocaleString() })}</p>
       )}
       <div className="gp-pop__field">
-        <label className="gp-pop__fieldlabel">Target faces</label>
-        <input type="number" min={100} step={500} value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
+        <label className="gp-pop__fieldlabel" htmlFor="gp-decimate-faces">{t('generate.decimate.targetFaces')}</label>
+        <input id="gp-decimate-faces" type="number" min={100} step={500} value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
         {reduction !== null && (
-          <p className="gp-pop__fieldhint">Reduction: <span className="gp-pop__accent">{reduction}%</span></p>
+          <p className="gp-pop__fieldhint">{t('generate.decimate.reduction')} <span className="gp-pop__accent">{reduction}%</span></p>
         )}
       </div>
       <div className="gp-pop__actions">
-        <button className="gp-pop__cancel" onClick={onClose}>Cancel</button>
+        <button className="gp-pop__cancel" onClick={onClose}>{t('generate.common.cancel')}</button>
         <button className="gp-pop__apply" disabled={decimating || !validTarget} onClick={() => validTarget && onDecimate(validTarget)}>
-          {decimating ? 'Processing…' : 'Apply'}
+          {decimating ? t('generate.common.processing') : t('generate.common.apply')}
         </button>
       </div>
     </div>

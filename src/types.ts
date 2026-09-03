@@ -65,6 +65,11 @@ export interface WorkflowExtension {
   input: PortType
   output: PortType
   params: ParamSchema[]
+  /** HuggingFace repo to download model weights from (manifest extensions). */
+  hfRepo?: string
+  /** Path prefixes to exclude / include during the weight download. */
+  hfSkipPrefixes?: string[]
+  hfIncludePrefixes?: string[]
 }
 
 // ─── Node specs ──────────────────────────────────────────────────────────────

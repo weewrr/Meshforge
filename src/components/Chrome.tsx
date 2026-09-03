@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { useNavigationStore, type Page } from '../stores/navigation'
 import { useAppStore } from '../stores/app'
+import { useT } from '../i18n'
 
-const ITEMS: { page: Page; label: string; icon: ReactElement }[] = [
+const ITEMS: { page: Page; key: string; icon: ReactElement }[] = [
   {
     page: 'generate',
-    label: 'Generate',
+    key: 'nav.generate',
     icon: (
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
@@ -14,7 +15,7 @@ const ITEMS: { page: Page; label: string; icon: ReactElement }[] = [
   },
   {
     page: 'workflows',
-    label: 'Workflows',
+    key: 'nav.workflows',
     icon: (
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <rect x="3" y="3" width="6" height="5" rx="1" />
@@ -27,7 +28,7 @@ const ITEMS: { page: Page; label: string; icon: ReactElement }[] = [
   },
   {
     page: 'models',
-    label: 'Extensions',
+    key: 'nav.models',
     icon: (
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -38,7 +39,7 @@ const ITEMS: { page: Page; label: string; icon: ReactElement }[] = [
   },
   {
     page: 'settings',
-    label: 'Settings',
+    key: 'nav.settings',
     icon: (
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="3" />
@@ -51,20 +52,24 @@ const ITEMS: { page: Page; label: string; icon: ReactElement }[] = [
 export function Sidebar() {
   const page = useNavigationStore((s) => s.page)
   const go = useNavigationStore((s) => s.go)
+  const t = useT()
 
   return (
     <nav className="sidebar">
-      {ITEMS.map((item) => (
-        <button
-          key={item.page}
-          title={item.label}
-          className={`sidebar__item ${page === item.page ? 'sidebar__item--active' : ''}`}
-          onClick={() => go(item.page)}
-        >
-          <span className="sidebar__icon">{item.icon}</span>
-          <span className="sidebar__label">{item.label}</span>
-        </button>
-      ))}
+      {ITEMS.map((item) => {
+        const label = t(item.key)
+        return (
+          <button
+            key={item.page}
+            title={label}
+            className={`sidebar__item ${page === item.page ? 'sidebar__item--active' : ''}`}
+            onClick={() => go(item.page)}
+          >
+            <span className="sidebar__icon">{item.icon}</span>
+            <span className="sidebar__label">{label}</span>
+          </button>
+        )
+      })}
     </nav>
   )
 }
@@ -82,13 +87,42 @@ function fmtGB(bytes: number): string {
 export function TitleBar() {
   const showRamIndicator = useAppStore((s) => s.showRamIndicator)
   const [mem, setMem] = useState<RamSample | null>(null)
+  const t = useT()
 
+  // Poll every 2s while the indicator is enabled. Guard with a no-op when the
+  // sample is unchanged so we never re-render the always-mounted title bar on
+  // a tick that changed nothing — that alone avoids a perpetual ~0.5Hz rerender.
   useEffect(() => {
-    const read = () => void window.meshforge?.getRam().then(setMem)
+    if (!showRamIndicator) {
+      setMem(null)
+      return
+    }
+    let active = true
+    const read = () =>
+      window.meshforge
+        ?.getRam()
+        .then((next) => {
+          if (!active || !next) return
+          setMem((prev) => {
+            if (
+              prev &&
+              prev.percent === next.percent &&
+              prev.total === next.total &&
+              prev.free === next.free
+            ) {
+              return prev
+            }
+            return next
+          })
+        })
+        .catch(() => undefined)
     read()
     const timer = setInterval(read, 2000)
-    return () => clearInterval(timer)
-  }, [])
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [showRamIndicator])
 
   const pct = mem ? Math.min(100, Math.round(mem.percent)) : 0
   let barColor = 'titlebar__rambar--ok'
@@ -103,13 +137,17 @@ export function TitleBar() {
 
   return (
     <div className="titlebar">
-      <span className="titlebar__app">Meshforge</span>
+      <span className="titlebar__app">{t('titlebar.app')}</span>
       {showRamIndicator && mem && (
         <div
           className="titlebar__ram"
-          title={`Used: ${fmtGB(mem.total - mem.free)} GB\nAvailable: ${fmtGB(mem.free)} GB\nTotal: ${fmtGB(mem.total)} GB`}
+          title={t('titlebar.ramTitle', {
+            used: fmtGB(mem.total - mem.free),
+            available: fmtGB(mem.free),
+            total: fmtGB(mem.total)
+          })}
         >
-          <span className="titlebar__ramlabel">RAM</span>
+          <span className="titlebar__ramlabel">{t('titlebar.ram')}</span>
           <span className="titlebar__rambar">
             <span className={`titlebar__ramfill ${barColor}`} style={{ width: `${pct}%` }} />
           </span>
@@ -121,19 +159,19 @@ export function TitleBar() {
       <div className="titlebar__spacer" />
       <button
         className="titlebar__btn"
-        title="最小化" aria-label="最小化"
+        title={t('titlebar.minimize')} aria-label={t('titlebar.minimize')}
         onClick={() => void window.meshforge?.winMin()}
       >
         —
       </button>
       <button
         className="titlebar__btn"
-        title="最大化" aria-label="最大化"
+        title={t('titlebar.maximize')} aria-label={t('titlebar.maximize')}
         onClick={() => void window.meshforge?.winMax()}
       >
         ▢
       </button>
-      <button className="titlebar__btn titlebar__btn--close" title="关闭" aria-label="关闭" onClick={() => void window.meshforge?.winClose()}>
+      <button className="titlebar__btn titlebar__btn--close" title={t('titlebar.close')} aria-label={t('titlebar.close')} onClick={() => void window.meshforge?.winClose()}>
         ×
       </button>
     </div>

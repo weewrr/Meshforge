@@ -102,6 +102,53 @@ export async function uploadFile(file: File): Promise<{ url: string; fileName: s
   return res.json()
 }
 
+/**
+ * Import a mesh by absolute filesystem path (Modly-aligned). The native file
+ * dialog runs in the Electron main process; the backend serves the file (or a
+ * trimesh-converted GLB) through /optimize/serve-file. No bytes go through the
+ * renderer and no Chromium <input type=file> is involved.
+ */
+export async function importMeshByPath(path: string): Promise<{ url: string }> {
+  const res = await fetch(`${API_BASE}/optimize/import-by-path`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path })
+  })
+  if (!res.ok) {
+    let detail = `import mesh failed: ${res.status}`
+    try {
+      const body = (await res.json()) as { detail?: unknown }
+      if (typeof body.detail === 'string') detail = body.detail
+    } catch { /* non-JSON error body */ }
+    throw new Error(detail)
+  }
+  return res.json()
+}
+
+/**
+ * Import an image by absolute filesystem path (Modly-aligned). The native file
+ * dialog runs in the Electron main process; the backend copies the file into
+ * workspace/uploads and returns the same shape as /upload — so imageNode,
+ * Generate-page preview and agent attachments all consume it unchanged. No
+ * Chromium <input type=file> is involved.
+ */
+export async function importImageByPath(path: string): Promise<{ url: string; fileName: string }> {
+  const res = await fetch(`${API_BASE}/upload/from-path`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path })
+  })
+  if (!res.ok) {
+    let detail = `import image failed: ${res.status}`
+    try {
+      const body = (await res.json()) as { detail?: unknown }
+      if (typeof body.detail === 'string') detail = body.detail
+    } catch { /* non-JSON error body */ }
+    throw new Error(detail)
+  }
+  return res.json()
+}
+
 // ─── Workflows ───────────────────────────────────────────────────────────────
 
 export async function listWorkflows(): Promise<WorkflowMeta[]> {
@@ -242,12 +289,141 @@ export async function reloadExtensionsApi(): Promise<{ ok: boolean; message: str
   }
 }
 
+// ─── Model weight downloads (HF Hub → server/models/<ext_id>) ───────────────
+
+export interface ModelStatusEntry {
+  extId: string
+  repoId: string
+  skipPrefixes: string[]
+  includePrefixes: string[]
+  downloaded: boolean
+  sizeBytes: number
+}
+
+export interface ModelDownloadInfo {
+  percent: number
+  file?: string
+  fileIndex?: number
+  totalFiles?: number
+  status?: string
+  bytesDownloaded?: number
+  totalBytes?: number
+  paused?: boolean
+  cancelled?: boolean
+  error?: string
+}
+
+/** Download state of every model extension that declares an HF repo. */
+export async function listModelStatus(): Promise<ModelStatusEntry[]> {
+  try {
+    const res = await fetch(`${API_BASE}/model/status`)
+    if (!res.ok) return []
+    const data = (await res.json()) as { models?: ModelStatusEntry[] }
+    return data.models ?? []
+  } catch {
+    return []
+  }
+}
+
+export async function pauseModelDownload(id: string): Promise<void> {
+  await fetch(`${API_BASE}/model/hf-download/pause`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id })
+  })
+}
+
+export async function cancelModelDownload(id: string): Promise<void> {
+  await fetch(`${API_BASE}/model/hf-download/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id })
+  })
+}
+
+/**
+ * Start an HF model download and consume its SSE stream.
+ * Resolves with the terminal event when the stream ends (done / paused /
+ * cancelled / error). Pause is resumable: the .part files are kept server-side
+ * and the next call with the same id resumes via Range headers.
+ */
+export async function startModelDownload(opts: {
+  id: string
+  repoId: string
+  skipPrefixes?: string[]
+  includePrefixes?: string[]
+  token?: string
+  onEvent: (e: ModelDownloadInfo) => void
+}): Promise<ModelDownloadInfo> {
+  const params = new URLSearchParams({
+    repo_id: opts.repoId,
+    model_id: opts.id
+  })
+  if (opts.skipPrefixes?.length) params.set('skip_prefixes', JSON.stringify(opts.skipPrefixes))
+  if (opts.includePrefixes?.length) params.set('include_prefixes', JSON.stringify(opts.includePrefixes))
+  if (opts.token) params.set('token', opts.token)
+
+  const res = await fetch(`${API_BASE}/model/hf-download?${params.toString()}`)
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`model download failed: ${res.status} ${detail}`)
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let last: ModelDownloadInfo = { percent: 0, status: 'Starting…' }
+
+  const parseSse = (chunk: string): void => {
+    buffer += chunk
+    let idx: number
+    while ((idx = buffer.indexOf('\n\n')) !== -1) {
+      const raw = buffer.slice(0, idx)
+      buffer = buffer.slice(idx + 2)
+      for (const line of raw.split('\n')) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const event = JSON.parse(line.slice(6)) as ModelDownloadInfo
+          last = { ...last, ...event }
+          opts.onEvent(last)
+        } catch {
+          /* skip malformed frames */
+        }
+      }
+    }
+  }
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    parseSse(decoder.decode(value, { stream: true }))
+  }
+  parseSse(decoder.decode())
+  return last
+}
+
 /** Install an extension from an uploaded local folder (webkitdirectory input). */
 export async function installExtensionLocal(files: File[], rootDir: string): Promise<{ ok: boolean; message: string }> {
   const form = new FormData()
   files.forEach((f) => form.append('files', f, f.webkitRelativePath || f.name))
   form.append('root_dir', rootDir)
   const res = await fetch(`${API_BASE}/extensions/install-local`, { method: 'POST', body: form })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { ok: false, message: (body as { detail?: string }).detail ?? `install failed: ${res.status}` }
+  }
+  return { ok: true, message: 'installed' }
+}
+
+/** Install an extension from a local folder path chosen via the main-process
+ *  native directory dialog (fs:selectFolder). The backend copies the tree —
+ *  no renderer file IO, unlike the legacy webkitdirectory upload above. */
+export async function installExtensionFromDir(folderPath: string): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/extensions/install-dir`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: folderPath })
+  })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { ok: false, message: (body as { detail?: string }).detail ?? `install failed: ${res.status}` }

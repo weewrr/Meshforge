@@ -99,6 +99,26 @@ export function SegmentedControl<T extends string>({ value, onChange, options, a
   )
 }
 
+export function Select<T extends string>({ value, onChange, options, ariaLabel }: {
+  value: T
+  onChange: (v: T) => void
+  options: { value: T; label: string }[]
+  ariaLabel?: string
+}) {
+  return (
+    <select
+      aria-label={ariaLabel}
+      value={value}
+      onChange={(e) => onChange(e.target.value as T)}
+      className="st-select"
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
+  )
+}
+
 export function LinkButton({ label, href }: { label: string; href?: string }) {
   return (
     <button className="st-linkbtn" onClick={() => href && window.open(href, '_blank')}>

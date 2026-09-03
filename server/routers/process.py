@@ -8,7 +8,7 @@ the frontend can poll /generate/jobs/{id}.
 import asyncio
 import uuid
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -33,18 +33,46 @@ class ProcessRequest(BaseModel):
 def _resolve_local(mesh_url: str) -> Path:
     """Map a mesh URL back to a file on disk.
 
-    Accepts both relative workspace URLs (/files/...) and absolute URLs
-    (http://host/files/...) — the frontend passes fullUrl() output (absolute)
-    when opening assets from the library or after workflow runs.
+    Accepts:
+    - workspace URLs (/files/... or http://host/files/...) — must stay inside
+      WORKSPACE_DIR (the /process/mesh security boundary).
+    - serve-file URLs (/optimize/serve-file?path=<abs> or the absolute http
+      form) — produced by the native-dialog Import→Mesh flow (Load 3D Mesh
+      nodes and the Generate-page toolbar). The ?path= query is the absolute
+      file path the user picked; /optimize/serve-file already validated that
+      it exists and is .glb, so the workspace check is intentionally skipped
+      for this branch.
+    - bare absolute/relative paths (legacy).
     """
+    path_part = mesh_url
+    query = ''
     if mesh_url.startswith(('http://', 'https://')):
-        mesh_url = urlparse(mesh_url).path
-    if mesh_url.startswith('/files/'):
-        rel = mesh_url[len('/files/'):]
-        path = WORKSPACE_DIR / rel
+        parsed = urlparse(mesh_url)
+        path_part, query = parsed.path, parsed.query
+    elif mesh_url.startswith('/optimize/serve-file') and '?' in mesh_url:
+        parsed = urlparse(mesh_url)
+        path_part, query = parsed.path, parsed.query
+    elif not mesh_url.startswith('/files/'):
+        # Bare path (e.g. a Windows absolute path with a drive letter) — used
+        # as-is; do NOT urlparse it or the drive letter becomes a scheme.
+        path_part = mesh_url
+
+    if path_part.startswith('/optimize/serve-file') and query:
+        qs = parse_qs(query)
+        picked = (qs.get('path') or [''])[0]
+        if not picked:
+            raise HTTPException(status_code=400, detail='serve-file url missing ?path=')
+        path = Path(picked).resolve()
+        if path.suffix.lower() != '.glb':
+            raise HTTPException(status_code=400, detail='only GLB files can be processed')
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail=f'mesh file not found: {mesh_url}')
+        return path
+
+    if path_part.startswith('/files/'):
+        path = (WORKSPACE_DIR / path_part[len('/files/'):]).resolve()
     else:
-        path = Path(mesh_url)
-    path = path.resolve()
+        path = Path(path_part).resolve()
     if not str(path).startswith(str(WORKSPACE_DIR.resolve())):
         raise HTTPException(status_code=400, detail='mesh_url outside workspace')
     if not path.is_file():

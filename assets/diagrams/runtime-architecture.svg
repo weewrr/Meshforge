@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" width="1600" height="600"
+     role="img" aria-label="MeshForge runtime architecture">
+  <title>MeshForge runtime architecture</title>
+  <desc>Electron main process spawns and watches a local Python FastAPI backend on port 8766; the React renderer talks to it over HTTP, SSE and IPC.</desc>
+  <style>
+    .t1   { fill: #0d1526; }
+    .t2   { fill: #4a5768; }
+    .t3   { fill: #8b93a7; }
+    .card { fill: #f6f8fb; stroke: rgba(15,23,42,0.10); }
+    .box  { fill: #ffffff; stroke: rgba(15,23,42,0.13); }
+    .soft { fill: #eef2f8; }
+    .ln   { stroke: #9aa3b5; fill: #9aa3b5; }
+    .lnd  { stroke: #c2cad6; fill: #c2cad6; }
+    .ga   { stop-color: #2f6ee0; }
+    .gb   { stop-color: #7c3aed; }
+
+    @media (prefers-color-scheme: dark) {
+      .t1   { fill: #e6e8ee; }
+      .t2   { fill: #a9b1c3; }
+      .t3   { fill: #6b7386; }
+      .card { fill: #141922; stroke: rgba(255,255,255,0.09); }
+      .box  { fill: #1a1d25; stroke: rgba(255,255,255,0.12); }
+      .soft { fill: #1f2531; }
+      .ln   { stroke: #4a5164; fill: #4a5164; }
+      .lnd  { stroke: #333a48; fill: #333a48; }
+      .ga   { stop-color: #4f8cff; }
+      .gb   { stop-color: #a855f7; }
+    }
+
+    .sans { font-family: 'Segoe UI','Helvetica Neue',Inter,Arial,sans-serif; }
+    .mono { font-family: 'JetBrains Mono','SF Mono',Consolas,Menlo,monospace; }
+    .a    { stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+  </style>
+  <defs>
+    <linearGradient id="gw" x1="0" y1="0" x2="1" y2="1">
+      <stop class="ga" offset="0"/>
+      <stop class="gb" offset="1"/>
+    </linearGradient>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+            orient="auto-start-reverse">
+      <path d="M0 1L9 5L0 9z" class="ln" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <text x="60" y="56" class="sans t1" font-size="26" font-weight="600">Everything runs on your machine</text>
+  <text x="60" y="86" class="sans t3" font-size="16">Electron ships the UI, a local Python backend does the work — nothing leaves localhost.</text>
+  <rect x="60" y="120" width="380" height="316" rx="16" class="card"/>
+  <rect x="60" y="120" width="5" height="316" rx="2.5" fill="#4f8cff"/>
+  <text x="88" y="164" class="sans t1" font-size="21" font-weight="600">Electron main</text>
+  <rect x="88" y="204" width="324" height="62" rx="10" class="box"/>
+  <circle cx="110" cy="235" r="4.5" fill="#4f8cff"/>
+  <text x="128" y="230" class="mono t1" font-size="14.5">BrowserWindow</text>
+  <text x="128" y="250" class="sans t3" font-size="13.5">frameless shell, native menus</text>
+  <rect x="88" y="278" width="324" height="62" rx="10" class="box"/>
+  <circle cx="110" cy="309" r="4.5" fill="#4f8cff"/>
+  <text x="128" y="304" class="mono t1" font-size="14.5">python-bridge.ts</text>
+  <text x="128" y="324" class="sans t3" font-size="13.5">spawn · health · watchdog</text>
+  <rect x="88" y="352" width="324" height="62" rx="10" class="box"/>
+  <circle cx="110" cy="383" r="4.5" fill="#4f8cff"/>
+  <text x="128" y="378" class="mono t1" font-size="14.5">IPC bridge</text>
+  <text x="128" y="398" class="sans t3" font-size="13.5">dialogs, file paths, RAM</text>
+  <rect x="610" y="120" width="380" height="316" rx="16" class="card"/>
+  <rect x="610" y="120" width="5" height="316" rx="2.5" fill="#a855f7"/>
+  <text x="638" y="164" class="sans t1" font-size="21" font-weight="600">Renderer · React</text>
+  <rect x="638" y="204" width="324" height="62" rx="10" class="box"/>
+  <circle cx="660" cy="235" r="4.5" fill="#a855f7"/>
+  <text x="678" y="230" class="mono t1" font-size="14.5">Pages</text>
+  <text x="678" y="250" class="sans t3" font-size="13.5">Generate / Workflows / Models</text>
+  <rect x="638" y="278" width="324" height="62" rx="10" class="box"/>
+  <circle cx="660" cy="309" r="4.5" fill="#a855f7"/>
+  <text x="678" y="304" class="mono t1" font-size="14.5">Node canvas</text>
+  <text x="678" y="324" class="sans t3" font-size="13.5">React Flow graph editor</text>
+  <rect x="638" y="352" width="324" height="62" rx="10" class="box"/>
+  <circle cx="660" cy="383" r="4.5" fill="#a855f7"/>
+  <text x="678" y="378" class="mono t1" font-size="14.5">3D viewer</text>
+  <text x="678" y="398" class="sans t3" font-size="13.5">Three.js + grid floor</text>
+  <rect x="1160" y="120" width="380" height="316" rx="16" class="card"/>
+  <rect x="1160" y="120" width="5" height="316" rx="2.5" fill="#34d399"/>
+  <text x="1188" y="164" class="sans t1" font-size="21" font-weight="600">Python · FastAPI :8766</text>
+  <rect x="1188" y="204" width="324" height="62" rx="10" class="box"/>
+  <circle cx="1210" cy="235" r="4.5" fill="#34d399"/>
+  <text x="1228" y="230" class="mono t1" font-size="14.5">Routers</text>
+  <text x="1228" y="250" class="sans t3" font-size="13.5">workflows / generate / process</text>
+  <rect x="1188" y="278" width="324" height="62" rx="10" class="box"/>
+  <circle cx="1210" cy="309" r="4.5" fill="#34d399"/>
+  <text x="1228" y="304" class="mono t1" font-size="14.5">Generator registry</text>
+  <text x="1228" y="324" class="sans t3" font-size="13.5">built-ins + installed extensions</text>
+  <rect x="1188" y="352" width="324" height="62" rx="10" class="box"/>
+  <circle cx="1210" cy="383" r="4.5" fill="#34d399"/>
+  <text x="1228" y="378" class="mono t1" font-size="14.5">Workspace</text>
+  <text x="1228" y="398" class="sans t3" font-size="13.5">workflows/ · extensions/ · models/</text>
+  <path d="M440 216h170" class="ln a" marker-end="url(#arw)"/>
+  <text x="525" y="202" text-anchor="middle" class="mono t3" font-size="13">IPC</text>
+  <path d="M990 216h170" class="ln a" marker-end="url(#arw)"/>
+  <text x="1075" y="202" text-anchor="middle" class="mono t3" font-size="13">fetch / SSE</text>
+  <path d="M250 436C250 546 1350 546 1350 436" class="ln a" marker-end="url(#arw)" stroke-dasharray="6 6"/>
+  <text x="800" y="540" text-anchor="middle" class="mono t3" font-size="13">spawn uvicorn · health poll · auto-restart on crash</text>
+</svg>

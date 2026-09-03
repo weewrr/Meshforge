@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 400" width="1600" height="400"
+     role="img" aria-label="MeshForge - local image to 3D mesh generation">
+  <title>MeshForge - image to 3D mesh, forged locally</title>
+
+  <style>
+    /* default = light (GitHub light theme) */
+    .bg        { fill: #fbfcfe; }
+    .grid      { stroke: rgba(15,23,42,0.045); }
+    .s0        { stop-color: #f3f7fd; }
+    .s1        { stop-color: #b4c3d8; }
+    .rim       { stroke: rgba(15,23,42,0.32); }
+    .scan      { stroke: rgba(15,23,42,0.18); }
+    .orbit     { stroke: rgba(15,23,42,0.24); }
+    .dot       { fill: #6f829e; }
+    .ga        { stop-color: #2f6ee0; }
+    .gb        { stop-color: #7c3aed; }
+    .gl        { stop-color: rgba(47,110,224,0.30); }
+    .t1        { fill: #0d1526; }
+    .t2        { fill: #4a5768; }
+    .t3        { fill: #9aa6b8; }
+    .pill      { fill: rgba(47,110,224,0.08); stroke: rgba(47,110,224,0.26); }
+    .pillTxt   { fill: #2f6ee0; }
+    .spark     { fill: #2f6ee0; }
+
+    /* dark mode */
+    @media (prefers-color-scheme: dark) {
+      .bg      { fill: #0a0e17; }
+      .grid    { stroke: rgba(255,255,255,0.05); }
+      .s0      { stop-color: #182238; }
+      .s1      { stop-color: #0a0e17; }
+      .rim     { stroke: rgba(255,255,255,0.16); }
+      .scan    { stroke: rgba(255,255,255,0.10); }
+      .orbit   { stroke: rgba(255,255,255,0.13); }
+      .dot     { fill: #7d90b6; }
+      .ga      { stop-color: #4f8cff; }
+      .gb      { stop-color: #a855f7; }
+      .gl      { stop-color: rgba(120,160,255,0.42); }
+      .t1      { fill: #f4f7fc; }
+      .t2      { fill: #8b97ae; }
+      .t3      { fill: #55607a; }
+      .pill    { fill: rgba(79,140,255,0.11); stroke: rgba(79,140,255,0.34); }
+      .pillTxt { fill: #7fa9ff; }
+      .spark   { fill: #cbd9ff; }
+    }
+
+    .wire line, .wire circle, .wire path {
+      fill: none; stroke: url(#gw); stroke-width: 1.3; stroke-linecap: round; opacity: 1;
+    }
+    .mono { font-family: 'JetBrains Mono', 'SF Mono', Consolas, Menlo, monospace; }
+    .sans { font-family: 'Segoe UI', 'Helvetica Neue', Inter, Arial, sans-serif; }
+  </style>
+
+  <defs>
+    <linearGradient id="gw" x1="0" y1="0" x2="1" y2="1">
+      <stop class="ga" offset="0"/>
+      <stop class="gb" offset="1"/>
+    </linearGradient>
+    <radialGradient id="sph" cx="0.38" cy="0.32" r="0.85">
+      <stop class="s0" offset="0"/>
+      <stop class="s1" offset="1"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop class="ga" offset="0" stop-opacity=".16"/>
+      <stop class="gl" offset="1" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".05"/>
+      <stop offset=".55" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity=".18"/>
+    </linearGradient>
+    <pattern id="bgGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke-width="1" class="grid"/>
+    </pattern>
+    <pattern id="pixels" width="9" height="9" patternUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="2.1" height="2.1" rx="0.6" class="dot"/>
+    </pattern>
+    <clipPath id="clipSphere">
+      <circle cx="1235" cy="200" r="132"/>
+    </clipPath>
+    <clipPath id="clipMesh">
+      <rect x="1235" y="38" width="162" height="324"/>
+    </clipPath>
+  </defs>
+
+  <!-- backdrop -->
+  <rect width="1600" height="400" class="bg"/>
+  <rect width="1600" height="400" fill="url(#bgGrid)"/>
+  <ellipse cx="1235" cy="200" rx="360" ry="250" fill="url(#halo)"/>
+
+  <!-- sphere: image (left) becoming mesh (right) -->
+  <circle cx="1235" cy="200" r="132" fill="url(#sph)"/>
+  <g clip-path="url(#clipSphere)">
+    <rect x="1073" y="38" width="162" height="324" fill="url(#pixels)"/>
+    <g class="wire" clip-path="url(#clipMesh)">
+      <line x1="1073" y1="19.9" x2="1397" y2="19.9"/>
+      <line x1="1073" y1="42.4" x2="1397" y2="42.4"/>
+      <line x1="1073" y1="64.9" x2="1397" y2="64.9"/>
+      <line x1="1073" y1="87.4" x2="1397" y2="87.4"/>
+      <line x1="1073" y1="109.9" x2="1397" y2="109.9"/>
+      <line x1="1073" y1="132.5" x2="1397" y2="132.5"/>
+      <line x1="1073" y1="155" x2="1397" y2="155"/>
+      <line x1="1073" y1="177.5" x2="1397" y2="177.5"/>
+      <line x1="1073" y1="200" x2="1397" y2="200"/>
+      <line x1="1073" y1="222.5" x2="1397" y2="222.5"/>
+      <line x1="1073" y1="245" x2="1397" y2="245"/>
+      <line x1="1073" y1="267.5" x2="1397" y2="267.5"/>
+      <line x1="1073" y1="290.1" x2="1397" y2="290.1"/>
+      <line x1="1073" y1="312.6" x2="1397" y2="312.6"/>
+      <line x1="1073" y1="335.1" x2="1397" y2="335.1"/>
+      <line x1="1073" y1="357.6" x2="1397" y2="357.6"/>
+      <line x1="1181" y1="-253.8" x2="1601" y2="473.7"/>
+      <line x1="1161.5" y1="-242.5" x2="1581.5" y2="484.9"/>
+      <line x1="1142" y1="-231.3" x2="1562" y2="496.2"/>
+      <line x1="1122.5" y1="-220" x2="1542.5" y2="507.4"/>
+      <line x1="1103" y1="-208.8" x2="1523" y2="518.7"/>
+      <line x1="1083.5" y1="-197.5" x2="1503.5" y2="530"/>
+      <line x1="1064" y1="-186.2" x2="1484" y2="541.2"/>
+      <line x1="1044.5" y1="-175" x2="1464.5" y2="552.5"/>
+      <line x1="1025" y1="-163.7" x2="1445" y2="563.7"/>
+      <line x1="1005.5" y1="-152.5" x2="1425.5" y2="575"/>
+      <line x1="986" y1="-141.2" x2="1406" y2="586.2"/>
+      <line x1="966.5" y1="-130" x2="1386.5" y2="597.5"/>
+      <line x1="947" y1="-118.7" x2="1367" y2="608.8"/>
+      <line x1="927.5" y1="-107.4" x2="1347.5" y2="620"/>
+      <line x1="908" y1="-96.2" x2="1328" y2="631.3"/>
+      <line x1="888.5" y1="-84.9" x2="1308.5" y2="642.5"/>
+      <line x1="869" y1="-73.7" x2="1289" y2="653.8"/>
+      <line x1="869" y1="473.7" x2="1289" y2="-253.8"/>
+      <line x1="888.5" y1="484.9" x2="1308.5" y2="-242.5"/>
+      <line x1="908" y1="496.2" x2="1328" y2="-231.3"/>
+      <line x1="927.5" y1="507.4" x2="1347.5" y2="-220"/>
+      <line x1="947" y1="518.7" x2="1367" y2="-208.8"/>
+      <line x1="966.5" y1="530" x2="1386.5" y2="-197.5"/>
+      <line x1="986" y1="541.2" x2="1406" y2="-186.2"/>
+      <line x1="1005.5" y1="552.5" x2="1425.5" y2="-175"/>
+      <line x1="1025" y1="563.7" x2="1445" y2="-163.7"/>
+      <line x1="1044.5" y1="575" x2="1464.5" y2="-152.5"/>
+      <line x1="1064" y1="586.2" x2="1484" y2="-141.2"/>
+      <line x1="1083.5" y1="597.5" x2="1503.5" y2="-130"/>
+      <line x1="1103" y1="608.8" x2="1523" y2="-118.7"/>
+      <line x1="1122.5" y1="620" x2="1542.5" y2="-107.4"/>
+      <line x1="1142" y1="631.3" x2="1562" y2="-96.2"/>
+      <line x1="1161.5" y1="642.5" x2="1581.5" y2="-84.9"/>
+      <line x1="1181" y1="653.8" x2="1601" y2="-73.7"/>
+    </g>
+      <circle cx="1261" cy="109.9" r="3.2" class="spark"/>
+      <circle cx="1261" cy="290.1" r="3.2" class="spark"/>
+      <circle cx="1287" cy="155" r="3.2" class="spark"/>
+      <circle cx="1287" cy="245" r="3.2" class="spark"/>
+      <circle cx="1313" cy="200" r="3.2" class="spark"/>
+      <circle cx="1326" cy="132.5" r="3.2" class="spark"/>
+    <rect x="1073" y="38" width="324" height="324" fill="url(#shade)"/>
+  </g>
+
+  <!-- forge seam + glow -->
+  <ellipse cx="1235" cy="200" rx="34" ry="158" fill="url(#halo)"/>
+  <line x1="1235" y1="54" x2="1235" y2="346"
+        stroke="url(#gw)" stroke-width="2.4" stroke-linecap="round"/>
+
+  <!-- contour -->
+  <circle cx="1235" cy="200" r="132" fill="none" stroke-width="1.3" class="rim"/>
+  <circle cx="1235" cy="200" r="152" fill="none" stroke-width="1"
+          stroke-dasharray="3 9" class="scan"/>
+  <ellipse cx="1235" cy="200" rx="180" ry="52" fill="none" stroke-width="1"
+           class="orbit" transform="rotate(-17 1235 200)"/>
+  <ellipse cx="1235" cy="200" rx="162" ry="40" fill="none" stroke-width="1"
+           stroke-dasharray="2 8" class="orbit" transform="rotate(14 1235 200)"/>
+
+  <!-- wordmark -->
+  <rect x="82" y="88" width="252" height="30" rx="15" class="pill"/>
+  <text x="208" y="108" text-anchor="middle" class="mono pillTxt"
+        font-size="12" letter-spacing="1.7">LOCAL-FIRST &#183; OPEN SOURCE</text>
+
+  <text x="80" y="196" class="sans t1" font-size="86" font-weight="700">Mesh<tspan fill="url(#gw)">Forge</tspan></text>
+  <rect x="84" y="216" width="196" height="4" rx="2" fill="url(#gw)"/>
+  <text x="80" y="262" class="mono t2" font-size="22">image &#8594; 3D mesh &#183; node workflows</text>
+  <text x="80" y="326" class="mono t3" font-size="14" letter-spacing="3">ELECTRON &#183; REACT &#183; FASTAPI &#183; THREE.JS</text>
+</svg>

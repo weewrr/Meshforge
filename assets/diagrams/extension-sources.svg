@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1432 356" width="1432" height="356"
+     role="img" aria-label="MeshForge extension install sources">
+  <title>MeshForge extension install sources</title>
+  <desc>Extensions can be installed from GitHub, Hugging Face or ModelScope, or from a local folder.</desc>
+  <style>
+    .t1   { fill: #0d1526; }
+    .t2   { fill: #4a5768; }
+    .t3   { fill: #8b93a7; }
+    .card { fill: #f6f8fb; stroke: rgba(15,23,42,0.10); }
+    .box  { fill: #ffffff; stroke: rgba(15,23,42,0.13); }
+    .soft { fill: #eef2f8; }
+    .ln   { stroke: #9aa3b5; fill: #9aa3b5; }
+    .lnd  { stroke: #c2cad6; fill: #c2cad6; }
+    .ga   { stop-color: #2f6ee0; }
+    .gb   { stop-color: #7c3aed; }
+
+    @media (prefers-color-scheme: dark) {
+      .t1   { fill: #e6e8ee; }
+      .t2   { fill: #a9b1c3; }
+      .t3   { fill: #6b7386; }
+      .card { fill: #141922; stroke: rgba(255,255,255,0.09); }
+      .box  { fill: #1a1d25; stroke: rgba(255,255,255,0.12); }
+      .soft { fill: #1f2531; }
+      .ln   { stroke: #4a5164; fill: #4a5164; }
+      .lnd  { stroke: #333a48; fill: #333a48; }
+      .ga   { stop-color: #4f8cff; }
+      .gb   { stop-color: #a855f7; }
+    }
+
+    .sans { font-family: 'Segoe UI','Helvetica Neue',Inter,Arial,sans-serif; }
+    .mono { font-family: 'JetBrains Mono','SF Mono',Consolas,Menlo,monospace; }
+    .a    { stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+  </style>
+  <defs>
+    <linearGradient id="gw" x1="0" y1="0" x2="1" y2="1">
+      <stop class="ga" offset="0"/>
+      <stop class="gb" offset="1"/>
+    </linearGradient>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+            orient="auto-start-reverse">
+      <path d="M0 1L9 5L0 9z" class="ln" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <text x="46" y="34" class="sans t1" font-size="20" font-weight="600">Install from three sources</text>
+  <rect x="46" y="56" width="420" height="214" rx="14" class="card"/>
+<g transform="translate(76 92)"><circle cx="22" cy="22" r="20" fill="none" stroke="#8b93a7" stroke-width="2"/><circle cx="11" cy="12" r="3.4" fill="#8b93a7"/><circle cx="11" cy="32" r="3.4" fill="#8b93a7"/><circle cx="33" cy="22" r="3.4" fill="#8b93a7"/><path d="M11 15.4v13.2M14 12h7a5 5 0 0 1 5 5v5" fill="none" stroke="#8b93a7" stroke-width="2" stroke-linecap="round"/></g>
+  <text x="138" y="110" class="sans t1" font-size="20" font-weight="600">GitHub</text>
+  <text x="138" y="134" class="mono t3" font-size="12.5">github.com/user/repo</text>
+  <line x1="70" y1="164" x2="442" y2="164" class="lnd"/>
+  <text x="70" y="192" class="sans t2" font-size="14">URL resolves to a file tree</text>
+  <text x="70" y="216" class="sans t2" font-size="14">Streamed into .staging/ first</text>
+  <text x="70" y="240" class="sans t2" font-size="14">Rolls back if validation fails</text>
+  <path d="M478 163h16" class="lnd a"/>
+  <rect x="506" y="56" width="420" height="214" rx="14" class="card"/>
+<g transform="translate(536 92)"><circle cx="22" cy="22" r="20" fill="none" stroke="#f59e0b" stroke-width="2"/><circle cx="15" cy="18" r="2.6" fill="#f59e0b"/><circle cx="29" cy="18" r="2.6" fill="#f59e0b"/><path d="M13 27a9 9 0 0 0 18 0" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round"/></g>
+  <text x="598" y="110" class="sans t1" font-size="20" font-weight="600">Hugging Face</text>
+  <text x="598" y="134" class="mono t3" font-size="12.5">huggingface.co/user/model</text>
+  <line x1="530" y1="164" x2="902" y2="164" class="lnd"/>
+  <text x="530" y="192" class="sans t2" font-size="14">URL resolves to a file tree</text>
+  <text x="530" y="216" class="sans t2" font-size="14">Streamed into .staging/ first</text>
+  <text x="530" y="240" class="sans t2" font-size="14">Rolls back if validation fails</text>
+  <path d="M938 163h16" class="lnd a"/>
+  <rect x="966" y="56" width="420" height="214" rx="14" class="card"/>
+<g transform="translate(996 92)"><circle cx="22" cy="22" r="20" fill="none" stroke="#4f8cff" stroke-width="2"/><path d="M22 10l10 5.5v11L22 32 12 26.5v-11z" fill="none" stroke="#4f8cff" stroke-width="2"/><path d="M12 15.5L22 21l10-5.5M22 21v11" fill="none" stroke="#4f8cff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <text x="1058" y="110" class="sans t1" font-size="20" font-weight="600">ModelScope</text>
+  <text x="1058" y="134" class="mono t3" font-size="12.5">modelscope.cn/models/user/model</text>
+  <line x1="990" y1="164" x2="1362" y2="164" class="lnd"/>
+  <text x="990" y="192" class="sans t2" font-size="14">URL resolves to a file tree</text>
+  <text x="990" y="216" class="sans t2" font-size="14">Streamed into .staging/ first</text>
+  <text x="990" y="240" class="sans t2" font-size="14">Rolls back if validation fails</text>
+  <text x="716" y="310" text-anchor="middle" class="sans t2" font-size="15.5">manifest.json + entrypoint are validated before the package is moved into <tspan class="mono">extensions/&lt;id&gt;</tspan></text>
+  <text x="716" y="336" text-anchor="middle" class="sans t3" font-size="14">A local folder works too — pick it with a native directory dialog.</text>
+</svg>

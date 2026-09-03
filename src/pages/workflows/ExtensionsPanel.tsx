@@ -2,30 +2,34 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { listExtensions } from '../../api'
 import { NODE_SPECS, nodeSpec } from '../../types'
 import type { WorkflowExtension } from '../../types'
+import { useT } from '../../i18n'
 
 interface PanelItem {
   dragPayload: string
-  label: string
+  label?: string
+  labelKey?: string
   color: string
   glyph: string
 }
 
 const BUILTIN_ITEMS: PanelItem[] = [
-  { dragPayload: 'builtin:imageNode', label: 'Image', color: '#38bdf8', glyph: '🖼' },
-  { dragPayload: 'builtin:textNode', label: 'Text', color: '#fbbf24', glyph: 'T' },
-  { dragPayload: 'builtin:meshNode', label: 'Load 3D Mesh', color: '#a78bfa', glyph: '◈' },
-  { dragPayload: 'builtin:generatorNode', label: 'Generate Mesh', color: '#34d399', glyph: '⚙' },
-  { dragPayload: 'builtin:outputNode', label: 'Add to Scene', color: '#a78bfa', glyph: '⬒' },
-  { dragPayload: 'builtin:previewNode', label: 'Preview', color: '#38bdf8', glyph: '▦' },
-  { dragPayload: 'builtin:waitNode', label: 'Wait', color: '#71717a', glyph: '⏸' },
-  { dragPayload: 'builtin:whileNode', label: 'While', color: '#f59e0b', glyph: '↻' },
-  { dragPayload: 'builtin:forEachNode', label: 'For Each', color: '#38bdf8', glyph: '⧉' }
+  { dragPayload: 'builtin:imageNode', labelKey: 'workflows.palette.imageLabel', color: '#38bdf8', glyph: '🖼' },
+  { dragPayload: 'builtin:textNode', labelKey: 'workflows.palette.textLabel', color: '#fbbf24', glyph: 'T' },
+  { dragPayload: 'builtin:meshNode', labelKey: 'workflows.palette.meshLabel', color: '#a78bfa', glyph: '◈' },
+  { dragPayload: 'builtin:generatorNode', labelKey: 'workflows.palette.generateLabel', color: '#34d399', glyph: '⚙' },
+  { dragPayload: 'builtin:outputNode', labelKey: 'workflows.palette.outputLabel', color: '#a78bfa', glyph: '⬒' },
+  { dragPayload: 'builtin:previewNode', labelKey: 'workflows.palette.previewLabel', color: '#38bdf8', glyph: '▦' },
+  { dragPayload: 'builtin:waitNode', labelKey: 'workflows.palette.waitLabel', color: '#71717a', glyph: '⏸' },
+  { dragPayload: 'builtin:whileNode', labelKey: 'workflows.palette.whileLabel', color: '#f59e0b', glyph: '↻' },
+  { dragPayload: 'builtin:forEachNode', labelKey: 'workflows.palette.forEachLabel', color: '#38bdf8', glyph: '⧉' }
 ]
 
 const PANEL_MIN = 200
 const PANEL_MAX = 480
 
 function PanelTile({ item }: { item: PanelItem }) {
+  const t = useT()
+  const labelText = item.labelKey ? t(item.labelKey) : item.label ?? ''
   return (
     <div
       className="wf-tile"
@@ -34,20 +38,21 @@ function PanelTile({ item }: { item: PanelItem }) {
         e.dataTransfer.setData('application/meshforge-node', item.dragPayload)
         e.dataTransfer.effectAllowed = 'move'
       }}
-      title={`拖到画布添加 ${item.label}`}
+      title={t('workflows.panel.dragToAdd', { label: labelText })}
     >
       <span className="wf-tile__glyph" style={{ color: item.color }}>
         {item.glyph}
       </span>
-      <span className="wf-tile__label">{item.label}</span>
+      <span className="wf-tile__label">{labelText}</span>
     </div>
   )
 }
 
 export default function ExtensionsPanel() {
+  const t = useT()
   const [extensions, setExtensions] = useState<WorkflowExtension[]>([])
   const [search, setSearch] = useState('')
-  const [width, setWidth] = useState(232)
+  const [width, setWidth] = useState(300)
   const dragging = useRef(false)
   const startX = useRef(0)
   const startW = useRef(0)
@@ -75,7 +80,10 @@ export default function ExtensionsPanel() {
   }, [])
 
   const query = search.trim().toLowerCase()
-  const builtinItems = BUILTIN_ITEMS.filter((n) => !query || n.label.toLowerCase().includes(query))
+  const builtinItems = BUILTIN_ITEMS.filter((n) => {
+    const labelText = (n.labelKey ? t(n.labelKey) : n.label ?? '').toLowerCase()
+    return !query || labelText.includes(query)
+  })
   const modelItems = useMemo(
     () =>
       extensions
@@ -115,19 +123,19 @@ export default function ExtensionsPanel() {
       />
       <div className="wf-panel__inner">
         <div className="wf-panel__header">
-          <h2>节点</h2>
-          <p>拖拽到画布</p>
+          <h2>{t('workflows.panel.title')}</h2>
+          <p>{t('workflows.panel.dragToCanvas')}</p>
         </div>
         <input
           className="wf-panel__search"
           type="text"
-          placeholder="搜索…"
+          placeholder={t('workflows.panel.search')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
 
         <div className="wf-panel__group">
-          <div className="wf-panel__group-title">基础</div>
+          <div className="wf-panel__group-title">{t('workflows.panel.groupBasic')}</div>
           <div className="wf-panel__grid">
             {builtinItems.map((item) => (
               <PanelTile key={item.dragPayload} item={item} />
@@ -137,7 +145,7 @@ export default function ExtensionsPanel() {
 
         <div className="wf-panel__group">
           <div className="wf-panel__group-title">
-            生成器
+            {t('workflows.panel.groupGenerators')}
             <span className="wf-panel__count">{modelItems.length}</span>
           </div>
           <div className="wf-panel__grid">
@@ -149,7 +157,7 @@ export default function ExtensionsPanel() {
 
         <div className="wf-panel__group">
           <div className="wf-panel__group-title">
-            网格工具
+            {t('workflows.panel.groupMeshTools')}
             <span className="wf-panel__count">{processItems.length}</span>
           </div>
           <div className="wf-panel__grid">
@@ -160,10 +168,10 @@ export default function ExtensionsPanel() {
         </div>
 
         <div className="wf-panel__legend">
-          {(['image', 'text', 'mesh', 'any'] as const).map((t) => (
-            <span key={t} className="wf-panel__legend-item">
-              <i style={{ background: portColor(t) }} />
-              {portLabel(t)}
+          {(['image', 'text', 'mesh', 'any'] as const).map((pt) => (
+            <span key={pt} className="wf-panel__legend-item">
+              <i style={{ background: portColor(pt) }} />
+              {t(portLabel(pt))}
             </span>
           ))}
         </div>
@@ -188,12 +196,12 @@ function portColor(t: string): string {
 function portLabel(t: string): string {
   switch (t) {
     case 'image':
-      return '图片'
+      return 'workflows.panel.portImage'
     case 'text':
-      return '文本'
+      return 'workflows.panel.portText'
     case 'mesh':
-      return '网格'
+      return 'workflows.panel.portMesh'
     default:
-      return '任意'
+      return 'workflows.panel.portAny'
   }
 }

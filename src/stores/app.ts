@@ -7,11 +7,13 @@ import { create } from 'zustand'
 
 export type ThinkingMode = 'auto' | 'on' | 'off'
 export type UiScale = 'small' | 'medium' | 'large' | 'very-large'
+export type UiLocale = 'en' | 'zh'
 
 export interface AppSettings {
   showRamIndicator: boolean
   useAtkinsonFont: boolean
   uiScale: UiScale
+  locale: UiLocale
   hfToken: string
   ollamaUrl: string
   defaultModel: string
@@ -19,19 +21,28 @@ export interface AppSettings {
   modelsDir: string
   workspaceDir: string
   workflowsDir: string
+  gpuDevice: string
+  fp16: boolean
+  vramLimit: string
+  parallelWorkers: string
 }
 
 const DEFAULTS: AppSettings = {
   showRamIndicator: true,
   useAtkinsonFont: false,
   uiScale: 'medium',
+  locale: 'en',
   hfToken: '',
   ollamaUrl: 'http://localhost:11434',
   defaultModel: 'qwen2.5:3b',
   defaultThinking: 'auto',
   modelsDir: '~/.meshforge/models',
   workspaceDir: '~/Documents/Meshforge',
-  workflowsDir: '~/.meshforge/workflows'
+  workflowsDir: '~/.meshforge/workflows',
+  gpuDevice: 'auto',
+  fp16: true,
+  vramLimit: '8',
+  parallelWorkers: '1'
 }
 
 const STORAGE_KEY = 'meshforge.settings'
@@ -73,9 +84,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   applyUi: () => {
-    const { useAtkinsonFont, uiScale } = get()
+    const { useAtkinsonFont, uiScale, locale } = get()
     document.documentElement.classList.toggle('font-atkinson', useAtkinsonFont)
     document.documentElement.style.zoom = String(UI_SCALE_ZOOM[uiScale])
+    document.documentElement.lang = locale
   }
 }))
 

@@ -1,10 +1,15 @@
 import asyncio
 import json
+import os
 import shutil
+import tempfile
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from generators.registry import registry
 from jobs import JobState, jobs
@@ -112,3 +117,87 @@ def cancel_job(job_id: str) -> dict:
         raise HTTPException(status_code=404, detail='job not found')
     jobs.request_cancel(job_id)
     return {'ok': True}
+
+
+# ─── Import an image by absolute path (Modly-aligned) ────────────────────────
+# Same rationale as /optimize/import-by-path: the native dialog runs in the
+# Electron main process and only returns a filesystem path, so no Chromium
+# <input type=file> is ever opened in the renderer (documented to freeze this
+# machine's renderer). The file is copied into workspace/uploads — identical to
+# what /upload produces — so every existing consumer (imageNode url → fetch,
+# Generate-page preview, agent attachments) works unchanged.
+
+ALLOWED_IMAGE_EXTS = {'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'}
+
+
+class UploadFromPathRequest(BaseModel):
+    path: str
+
+
+@router.post('/upload/from-path')
+async def import_image_by_path(body: UploadFromPathRequest) -> dict:
+    file_path = Path(body.path)
+    if not file_path.is_file():
+        raise HTTPException(status_code=400, detail='file not found')
+    ext = file_path.suffix.lstrip('.').lower()
+    if ext not in ALLOWED_IMAGE_EXTS:
+        raise HTTPException(status_code=400, detail=f'unsupported image format: {ext}')
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    name = f'{uuid.uuid4().hex}.{ext}'
+    dest = UPLOAD_DIR / name
+    try:
+        shutil.copyfile(file_path, dest)
+    except OSError as err:
+        raise HTTPException(status_code=400, detail=f'unreadable file: {err}')
+    return {'url': f'/files/uploads/{name}', 'fileName': file_path.name}
+
+
+# ─── Import mesh by absolute path (Modly-aligned) ────────────────────────────
+# The Electron main process opens a native file dialog and returns a filesystem
+# path — no bytes ever flow through the renderer, and no Chromium <input
+# type=file> is involved (which is documented to freeze this machine's
+# renderer). .glb is served in place; obj/stl/ply are converted to GLB with
+# trimesh in a temp dir. Served URLs go through /optimize/serve-file so the
+# viewer always receives a proper model/gltf-binary response.
+
+ALLOWED_IMPORT_EXTS = {'glb', 'obj', 'stl', 'ply'}
+
+
+class ImportByPathRequest(BaseModel):
+    path: str
+
+
+@router.post('/optimize/import-by-path')
+async def import_mesh_by_path(body: ImportByPathRequest) -> dict:
+    file_path = Path(body.path)
+    if not file_path.is_file():
+        raise HTTPException(status_code=400, detail='file not found')
+    ext = file_path.suffix.lstrip('.').lower()
+    if ext not in ALLOWED_IMPORT_EXTS:
+        raise HTTPException(status_code=400, detail=f'unsupported format: {ext}')
+
+    if ext == 'glb':
+        # Serve the original file directly — no copy.
+        return {'url': f'/optimize/serve-file?path={quote(str(file_path))}'}
+
+    # obj / stl / ply: convert to GLB in a temp directory.
+    tmp_dir = tempfile.mkdtemp(prefix='meshforge_import_')
+    output_path = os.path.join(tmp_dir, 'mesh.glb')
+    try:
+        import trimesh  # lazy: only needed for non-GLB conversions
+        loaded = trimesh.load(str(file_path))
+        loaded.export(output_path)
+    except Exception as err:  # noqa: BLE001 — surface a clean error, never 500-crash
+        raise HTTPException(status_code=400, detail=f'unrecognised mesh: {err}')
+    return {'url': f'/optimize/serve-file?path={quote(output_path)}'}
+
+
+@router.get('/optimize/serve-file')
+def serve_imported_file(path: str) -> FileResponse:
+    file_path = Path(path)
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail='file not found')
+    if file_path.suffix.lower() != '.glb':
+        raise HTTPException(status_code=400, detail='only GLB files can be served')
+    return FileResponse(str(file_path), media_type='model/gltf-binary')

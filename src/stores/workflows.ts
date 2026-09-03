@@ -61,6 +61,34 @@ let listInFlight = false
 // ─── Tab order (visual only; persisted locally, backend stays recency-sorted) ──
 const TAB_ORDER_KEY = 'meshforge.tabOrder'
 
+// Last-opened workflow id. Survives renderer crash-reloads so the tab bar
+// restores the workflow the user was editing, not the first one in the list.
+const LAST_WF_KEY = 'meshforge.lastWorkflowId'
+
+function loadLastWorkflowId(): string | null {
+  try {
+    return localStorage.getItem(LAST_WF_KEY)
+  } catch {
+    return null
+  }
+}
+
+function saveLastWorkflowId(id: string): void {
+  try {
+    localStorage.setItem(LAST_WF_KEY, id)
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function clearLastWorkflowId(): void {
+  try {
+    localStorage.removeItem(LAST_WF_KEY)
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 function loadTabOrder(): string[] {
   try {
     const raw = localStorage.getItem(TAB_ORDER_KEY)
@@ -156,6 +184,12 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => {
         }
         const current = get().current
         if (current && workflows.some((w) => w.id === current.id)) return
+        // Crash-recovery: restore the workflow that was open before the reload.
+        const savedId = loadLastWorkflowId()
+        if (savedId && workflows.some((w) => w.id === savedId)) {
+          await get().select(savedId)
+          return
+        }
         await get().select(workflows[0].id)
       } catch (e) {
         useLogsStore.getState().error(`load workflows: ${e}`)
@@ -170,6 +204,7 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => {
         const current = await getWorkflow(id)
         clearHistory()
         set({ current, dirty: false })
+        saveLastWorkflowId(id)
       } catch (e) {
         useLogsStore.getState().error(`select workflow: ${e}`)
       }
@@ -410,6 +445,7 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => {
       await deleteWorkflow(id).catch((e) => useLogsStore.getState().error(`delete workflow: ${e}`))
       const workflows = get().workflows.filter((w) => w.id !== id)
       set({ workflows })
+      if (loadLastWorkflowId() === id) clearLastWorkflowId()
       if (get().current?.id === id) {
         clearHistory()
         if (workflows.length > 0) await get().select(workflows[0].id)

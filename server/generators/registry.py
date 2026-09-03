@@ -17,6 +17,8 @@ from .hunyuan import Hunyuan3DGenerator
 from .mock import MockReliefGenerator
 
 EXTENSIONS_DIR = Path(__file__).resolve().parent.parent / 'extensions'
+# Downloaded model weights live here (one subfolder per extension id).
+MODELS_DIR = Path(__file__).resolve().parent.parent / 'models'
 
 
 class GeneratorRegistry:
@@ -30,6 +32,7 @@ class GeneratorRegistry:
         self._generators: dict[str, BaseGenerator] = {}
         self._process_tools: dict[str, dict] = {}
         self._errors: dict[str, str] = {}
+        self._manifests: dict[str, dict] = {}
 
     def register(self, generator: BaseGenerator) -> None:
         self._generators[generator.id] = generator
@@ -92,6 +95,9 @@ class GeneratorRegistry:
                 ext_id = str(manifest.get('id') or ext_dir.name)
                 kind = str(manifest.get('kind') or 'model')
                 display_name = str(manifest.get('display_name') or ext_id)
+                # Keep a snapshot of the raw manifest so routers can read
+                # hfRepo / hf_skip_prefixes / hf_include_prefixes etc.
+                self._manifests[ext_id] = manifest
 
                 if kind == 'process':
                     module = self._load_generator_module(ext_dir, 'processor.py')
@@ -136,6 +142,11 @@ class GeneratorRegistry:
         self._generators.pop(ext_id, None)
         self._process_tools.pop(ext_id, None)
         self._errors.pop(ext_id, None)
+        self._manifests.pop(ext_id, None)
+
+    def get_manifest(self, ext_id: str) -> dict:
+        """Raw manifest of a manifest-loaded extension ({} if unknown)."""
+        return self._manifests.get(ext_id, {})
 
     def process_tools(self) -> list[dict]:
         return [

@@ -1,8 +1,9 @@
-import { Suspense, useEffect, useMemo, useRef } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ElementRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Center, OrbitControls, TransformControls, useGLTF } from '@react-three/drei'
+import { OrbitControls, TransformControls, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Group, Mesh } from 'three'
+import { useLogsStore } from '../stores/logs'
 import { useSceneStore, type LightSettings, type ViewMode } from '../stores/scene'
 
 // ─── Matcap / UV checker textures (generated once) ─────────────────────────
@@ -111,11 +112,25 @@ interface ModelProps {
   gizmoMode: 'translate' | 'rotate' | 'scale' | null
   onSelect: (selected: boolean) => void
   onStats: (stats: { triangles: number; vertices: number } | null) => void
+  /** Reports the vertical centre of the model (half its height after grounding). */
+  onFoot: (centreY: number) => void
 }
 
-function Model({ url, viewMode, selected, gizmoMode, onSelect, onStats }: ModelProps) {
+function Model({ url, viewMode, selected, gizmoMode, onSelect, onStats, onFoot }: ModelProps) {
   const { scene } = useGLTF(url)
   const cloned = useMemo<Group>(() => scene.clone(true), [scene])
+
+  // Ground the model on the grid plane like a CAD/DCC viewport: centre it on
+  // X/Z and drop its bounding-box floor onto y = 0 (modly parity — its viewer
+  // keeps a persistent <gridHelper> and sits meshes on it). Runs before first
+  // paint so the model never flashes un-grounded.
+  useLayoutEffect(() => {
+    const box = new THREE.Box3().setFromObject(cloned)
+    const size = box.getSize(new THREE.Vector3())
+    const centre = box.getCenter(new THREE.Vector3())
+    cloned.position.set(-centre.x, -box.min.y, -centre.z)
+    onFoot(size.y > 0 ? size.y / 2 : 0)
+  }, [cloned, onFoot])
 
   useEffect(() => {
     applyViewMode(cloned, viewMode)
@@ -194,7 +209,9 @@ export default function Viewer3D({
   url,
   light
 }: {
-  url: string
+  /** null = no model loaded yet — the viewer stays mounted on the ground grid
+      (modly parity) and shows a hint overlay instead of unmounting. */
+  url: string | null
   light?: LightSettings
 }) {
   const l = light ?? { ambient: 0.7, main: 1.4, fill: 0.4 }
@@ -205,6 +222,36 @@ export default function Viewer3D({
   const setMeshSelected = useSceneStore((s) => s.setMeshSelected)
   const setMeshStats = useSceneStore((s) => s.setMeshStats)
   const captureRef = useRef<(() => string) | null>(null)
+  // Orbit target's Y follows the grounded model's vertical centre so the camera
+  // keeps framing the mesh (and the empty grid centre when nothing is loaded).
+  const [groundTargetY, setGroundTargetY] = useState(0)
+  const orbitRef = useRef<ElementRef<typeof OrbitControls>>(null)
+  useEffect(() => {
+    if (!url) setGroundTargetY(0)
+  }, [url])
+  // Retarget only when a model's grounded height actually changes — never on
+  // plain re-renders, so a pan/rotate the user already made is preserved.
+  useEffect(() => {
+    const c = orbitRef.current
+    if (c) {
+      c.target.set(0, groundTargetY, 0)
+      c.update()
+    }
+  }, [groundTargetY])
+
+  // Trace: crash triage markers. Each log line pinpoints how far the Import →
+  // Mesh flow got before the renderer died (terminal shows these via the main
+  // process console forwarding). Child effects (R3F Canvas / WebGL init) run
+  // before this one, so seeing this line means the WebGL context came up.
+  useEffect(() => {
+    useLogsStore.getState().info('viewer: mounted (WebGL canvas up)')
+    return () => {
+      useLogsStore.getState().info('viewer: unmounted')
+    }
+  }, [])
+  useEffect(() => {
+    if (url) useLogsStore.getState().info(`viewer: loading mesh from ${url}`)
+  }, [url])
 
   // Re-render before capturing so the buffer holds a fresh frame.
   function screenshot(): string | null {
@@ -215,6 +262,7 @@ export default function Viewer3D({
     <div className="gp-viewer__canvas">
       <Canvas
         camera={{ position: [2.2, 1.6, 2.2], fov: 45 }}
+        dpr={[1, 1.5]}
         gl={{ preserveDrawingBuffer: true }}
         onPointerMissed={() => setMeshSelected(false)}
       >
@@ -222,8 +270,10 @@ export default function Viewer3D({
         <ambientLight intensity={l.ambient} />
         <directionalLight position={[3, 4, 2]} intensity={l.main} />
         <directionalLight position={[-3, -1, -2]} intensity={l.fill} />
-        <Suspense fallback={null}>
-          <Center>
+        {/* Persistent ground grid — CAD/DCC style, always visible (modly parity). */}
+        <gridHelper args={[10, 20, '#3f3f46', '#27272a']} />
+        {url ? (
+          <Suspense fallback={null}>
             <Model
               url={url}
               viewMode={viewMode}
@@ -231,13 +281,20 @@ export default function Viewer3D({
               gizmoMode={gizmoMode}
               onSelect={setMeshSelected}
               onStats={setMeshStats}
+              onFoot={setGroundTargetY}
             />
-          </Center>
-        </Suspense>
-        <OrbitControls makeDefault enableDamping autoRotate={autoRotate} autoRotateSpeed={1.5} />
+          </Suspense>
+        ) : null}
+        <OrbitControls
+          ref={orbitRef}
+          makeDefault
+          enableDamping
+          autoRotate={autoRotate}
+          autoRotateSpeed={1.5}
+        />
         <ScreenshotBridge captureRef={captureRef} />
       </Canvas>
-      <ViewerToolbar onScreenshot={screenshot} />
+      {url && <ViewerToolbar onScreenshot={screenshot} />}
     </div>
   )
 }

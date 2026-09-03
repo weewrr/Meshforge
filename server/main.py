@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from routers import agent, extensions, generate, library, process, workflows
+from routers import agent, extensions, generate, library, model, process, workflows
 
 WORKSPACE_DIR = Path(__file__).resolve().parent / 'workspace'
 WORKSPACE_DIR.mkdir(exist_ok=True)
@@ -23,6 +23,7 @@ app.include_router(agent.router)
 app.include_router(workflows.router)
 app.include_router(extensions.router)
 app.include_router(process.router)
+app.include_router(model.router)
 app.include_router(library.router)
 app.mount('/files', StaticFiles(directory=WORKSPACE_DIR), name='files')
 

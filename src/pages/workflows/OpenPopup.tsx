@@ -3,6 +3,7 @@ import { getWorkflow, saveWorkflow } from '../../api'
 import { useWorkflowsStore } from '../../stores/workflows'
 import { useFocusTrap } from '../../hooks/useFocusTrap'
 import type { Workflow } from '../../types'
+import { useT } from '../../i18n'
 
 // ─── Mini graph preview ────────────────────────────────────────────────────
 // Schematic SVG thumbnail built from stored node positions, no React Flow.
@@ -131,6 +132,7 @@ function writeJson(key: string, value: unknown): void {
 // ─── Popup ──────────────────────────────────────────────────────────────────
 
 export default function OpenPopup({ onClose }: { onClose: () => void }) {
+  const t = useT()
   const trapRef = useFocusTrap<HTMLDivElement>(true, onClose)
   const store = useWorkflowsStore
   const select = store((s) => s.select)
@@ -244,8 +246,8 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
           <div className="wf-card__actions">
             <button
               className={`wf-card__action ${wf.bookmarked ? 'wf-card__action--starred' : ''}`}
-              title={wf.bookmarked ? '取消收藏' : '收藏'}
-              aria-label={wf.bookmarked ? '取消收藏' : '收藏'}
+              title={wf.bookmarked ? t('workflows.popup.unfavorite') : t('workflows.popup.favorite')}
+              aria-label={wf.bookmarked ? t('workflows.popup.unfavorite') : t('workflows.popup.favorite')}
               onClick={(e) => {
                 e.stopPropagation()
                 void toggleBookmark(wf.id).then(refresh)
@@ -255,8 +257,8 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
             </button>
             <button
               className="wf-card__action"
-              title="复制"
-              aria-label="复制"
+              title={t('workflows.popup.duplicate')}
+              aria-label={t('workflows.popup.duplicate')}
               onClick={(e) => {
                 e.stopPropagation()
                 void duplicate(wf.id).then(refresh)
@@ -266,8 +268,8 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
             </button>
             <button
               className="wf-card__action"
-              title="重命名"
-              aria-label="重命名"
+              title={t('workflows.popup.rename')}
+              aria-label={t('workflows.popup.rename')}
               onClick={(e) => {
                 e.stopPropagation()
                 setRenameTarget({ id: wf.id, value: wf.name })
@@ -277,8 +279,8 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
             </button>
             <button
               className="wf-card__action wf-card__action--danger"
-              title="删除"
-              aria-label="删除"
+              title={t('workflows.popup.delete')}
+              aria-label={t('workflows.popup.delete')}
               onClick={(e) => {
                 e.stopPropagation()
                 setDeleteTarget(wf.id)
@@ -289,8 +291,8 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
           </div>
         </div>
         <div className="wf-card__meta">
-          <p className="wf-card__name">{wf.name || 'Untitled'}</p>
-          <p className="wf-card__time">{new Date(wf.updatedAt).toLocaleString('zh-CN', { hour12: false })}</p>
+          <p className="wf-card__name">{wf.name || t('workflows.popup.untitled')}</p>
+          <p className="wf-card__time">{new Date(wf.updatedAt).toLocaleString('en-US', { hour12: false })}</p>
         </div>
       </div>
     )
@@ -342,8 +344,8 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
           <span className="wf-folder__spacer" />
           <button
             className={`wf-folder__btn ${bookmarkedFolders.includes(folder) ? 'wf-folder__btn--starred' : ''}`}
-            title={bookmarkedFolders.includes(folder) ? '取消收藏文件夹' : '收藏文件夹'}
-            aria-label={bookmarkedFolders.includes(folder) ? '取消收藏文件夹' : '收藏文件夹'}
+            title={bookmarkedFolders.includes(folder) ? t('workflows.popup.unfavoriteFolder') : t('workflows.popup.favoriteFolder')}
+            aria-label={bookmarkedFolders.includes(folder) ? t('workflows.popup.unfavoriteFolder') : t('workflows.popup.favoriteFolder')}
             onClick={(e) => {
               e.stopPropagation()
               toggleFolderBookmark(folder)
@@ -353,8 +355,8 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
           </button>
           <button
             className="wf-folder__btn"
-            title="文件夹颜色"
-            aria-label="文件夹颜色"
+            title={t('workflows.popup.folderColor')}
+            aria-label={t('workflows.popup.folderColor')}
             onClick={(e) => {
               e.stopPropagation()
               setColorPickerFolder((cur) => (cur === folder ? null : folder))
@@ -367,8 +369,8 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
           </button>
           <button
             className="wf-folder__btn wf-folder__btn--danger"
-            title="删除文件夹（工作流移回根目录）"
-            aria-label="删除文件夹（工作流移回根目录）"
+            title={t('workflows.popup.deleteFolder')}
+            aria-label={t('workflows.popup.deleteFolder')}
             onClick={(e) => {
               e.stopPropagation()
               deleteFolder(folder)
@@ -384,7 +386,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
                 key={c}
                 className={`wf-folder__color ${folderColors[folder] === c ? 'wf-folder__color--active' : ''}`}
                 style={{ background: c }}
-                aria-label={`设置文件夹颜色 ${c}`}
+                aria-label={t('workflows.popup.setFolderColor', { color: c })}
                 onClick={() => {
                   setFolderColor(folder, c)
                   setColorPickerFolder(null)
@@ -397,7 +399,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
           <div className="wf-open__grid wf-open__grid--in-folder">{inFolder.map(renderCard)}</div>
         )}
         {!collapsed && inFolder.length === 0 && (
-          <p className="wf-folder__empty">空文件夹 — 拖入工作流</p>
+          <p className="wf-folder__empty">{t('workflows.popup.emptyFolder')}</p>
         )}
       </div>
     )
@@ -424,17 +426,17 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
     >
       <div className="wf-open__dialog">
         <div className="wf-open__header">
-          <p>打开工作流</p>
+          <p>{t('workflows.popup.title')}</p>
           <div className="wf-open__header-actions">
             <button
               className="wf-open__icon-btn"
-              title="新建文件夹"
-              aria-label="新建文件夹"
+              title={t('workflows.popup.newFolder')}
+              aria-label={t('workflows.popup.newFolder')}
               onClick={() => setNewFolderName('')}
             >
               ＋
             </button>
-            <button className="wf-open__icon-btn" title="关闭" aria-label="关闭" onClick={onClose}>
+            <button className="wf-open__icon-btn" title={t('workflows.popup.close')} aria-label={t('workflows.popup.close')} onClick={onClose}>
               ✕
             </button>
           </div>
@@ -445,7 +447,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索工作流…"
+            placeholder={t('workflows.popup.search')}
             className="wf-open__search"
           />
         </div>
@@ -464,7 +466,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
                 }
               }}
               onBlur={() => setNewFolderName(null)}
-              placeholder="文件夹名称…（回车创建）"
+              placeholder={t('workflows.popup.folderName')}
             />
           </div>
         )}
@@ -481,12 +483,12 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
           }}
         >
           {workflows.length === 0 && folders.length === 0 && (
-            <p className="wf-open__empty">暂无已保存的工作流。</p>
+            <p className="wf-open__empty">{t('workflows.popup.noSaved')}</p>
           )}
 
           {query !== '' ? (
             matches.length === 0 ? (
-              <p className="wf-open__empty">没有匹配 “{search.trim()}” 的工作流。</p>
+              <p className="wf-open__empty">{t('workflows.popup.noMatch', { search: search.trim() })}</p>
             ) : (
               <div className="wf-open__grid">{matches.map(renderCard)}</div>
             )
@@ -494,18 +496,18 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
             <>
               {bookmarked.length > 0 && (
                 <>
-                  <div className="wf-open__section-title">已收藏</div>
+                  <div className="wf-open__section-title">{t('workflows.popup.favorited')}</div>
                   <div className="wf-open__grid">{bookmarked.map(renderCard)}</div>
                 </>
               )}
               {[...bookmarkedFolders.filter((f) => folders.includes(f)), ...folders.filter((f) => !bookmarkedFolders.includes(f))].map(
                 renderFolder
               )}
-              <div className="wf-open__section-title">未分组</div>
+              <div className="wf-open__section-title">{t('workflows.popup.ungrouped')}</div>
               {rootWorkflows.length > 0 ? (
                 <div className="wf-open__grid">{rootWorkflows.map(renderCard)}</div>
               ) : (
-                <p className="wf-open__empty">没有未分组的工作流。</p>
+                <p className="wf-open__empty">{t('workflows.popup.noUngrouped')}</p>
               )}
             </>
           )}
@@ -521,7 +523,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
           }}
         >
           <div className="wf-modal__card">
-            <p className="wf-modal__title">重命名工作流</p>
+            <p className="wf-modal__title">{t('workflows.popup.renameTitle')}</p>
             <input
               autoFocus
               value={renameTarget.value}
@@ -530,14 +532,14 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void handleRename()
               }}
-              placeholder="工作流名称…"
+              placeholder={t('workflows.popup.renamePlaceholder')}
             />
             <div className="wf-modal__actions">
               <button className="ghost" onClick={() => setRenameTarget(null)}>
-                取消
+                {t('workflows.popup.cancel')}
               </button>
               <button className="primary" disabled={!renameTarget.value.trim()} onClick={() => void handleRename()}>
-                重命名
+                {t('workflows.popup.rename')}
               </button>
             </div>
           </div>
@@ -553,14 +555,15 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
           }}
         >
           <div className="wf-modal__card">
-            <p className="wf-modal__title">删除工作流？</p>
+            <p className="wf-modal__title">{t('workflows.popup.deleteTitle')}</p>
             <p className="wf-modal__text">
-              “{workflows.find((w) => w.id === deleteTarget)?.name || 'Untitled'}”
-              将被永久删除，此操作无法撤销。
+              {t('workflows.popup.deleteConfirm', {
+                name: workflows.find((w) => w.id === deleteTarget)?.name || t('workflows.popup.untitled')
+              })}
             </p>
             <div className="wf-modal__actions">
               <button className="ghost" onClick={() => setDeleteTarget(null)}>
-                取消
+                {t('workflows.popup.cancel')}
               </button>
               <button
                 className="wf-modal__delete"
@@ -569,7 +572,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
                   setDeleteTarget(null)
                 }}
               >
-                删除
+                {t('workflows.popup.delete')}
               </button>
             </div>
           </div>

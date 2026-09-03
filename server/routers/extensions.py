@@ -18,6 +18,7 @@ import re
 import shutil
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -167,8 +168,8 @@ def _install_from_folder(staging: Path) -> dict:
     return {'ok': True, 'id': ext_id, 'kind': kind, 'name': manifest.get('display_name', ext_id)}
 
 
-def _download_zip(url: str, dest: Path) -> None:
-    """Download a GitHub repo zip into dest (urllib — no requests in this venv)."""
+def _download_to(url: str, dest: Path) -> None:
+    """Stream a file to dest (stdlib urllib — no requests in this venv)."""
     req = urllib.request.Request(url, headers={'User-Agent': 'meshforge'})
     with urllib.request.urlopen(req, timeout=60.0) as resp:
         total = int(resp.headers.get('Content-Length') or 0)
@@ -182,6 +183,67 @@ def _download_zip(url: str, dest: Path) -> None:
                 done += len(chunk)
                 if total > 0:
                     _set_progress('downloading', int(done * 90 / total))
+
+
+def _http_get_json(url: str) -> dict:
+    """GET a JSON endpoint, raising a descriptive HTTPException on failure."""
+    req = urllib.request.Request(url, headers={'User-Agent': 'meshforge'})
+    try:
+        with urllib.request.urlopen(req, timeout=60.0) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as exc:
+        raise HTTPException(status_code=400, detail=f'lookup failed ({exc.code}) for {url}')
+    except (urllib.error.URLError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f'lookup failed ({type(exc).__name__}) for {url}')
+
+
+def _parse_hf(url: str) -> str:
+    """Extract 'owner/repo' from a HuggingFace URL (huggingface.co or hf.co)."""
+    m = re.search(r'(?:huggingface|hf)\.co/(?:models/)?([^/]+)/([^/?#]+)', url)
+    if not m:
+        raise HTTPException(status_code=400, detail='Must be a HuggingFace repository URL')
+    return f"{m.group(1)}/{m.group(2).removesuffix('.git')}"
+
+
+def _hf_file_list(repo: str) -> list[str]:
+    """List file paths in a HuggingFace repo via the tree API."""
+    data = _http_get_json(f'https://huggingface.co/api/models/{repo}/tree/main?recursive=true')
+    files = []
+    for item in data:
+        if isinstance(item, dict) and item.get('type') == 'file':
+            files.append(item['path'])
+    return files
+
+
+def _parse_ms(url: str) -> tuple[str, str]:
+    """Extract (owner, repo) from a ModelScope URL."""
+    m = re.search(r'modelscope\.cn/(?:models/)?([^/]+)/([^/?#]+)', url)
+    if not m:
+        raise HTTPException(status_code=400, detail='Must be a ModelScope repository URL')
+    return m.group(1), m.group(2).removesuffix('.git')
+
+
+def _ms_file_list(owner: str, repo: str) -> list[str]:
+    """List file paths in a ModelScope repo via the repo files API."""
+    data = _http_get_json(f'https://modelscope.cn/api/v1/models/{owner}/{repo}/repo/files?Revision=master')
+    files = []
+    for item in data.get('Data', {}).get('Files', []) or []:
+        if isinstance(item, dict) and item.get('Type') == 'blob':
+            files.append(item['Path'])
+    return files
+
+
+def _download_repo_files(paths: list[str], download_url: str, staging: Path) -> None:
+    """Download a list of relative file paths into staging (dirs / __MACOSX skipped)."""
+    for rel in paths:
+        if rel.startswith('__MACOSX') or rel.endswith('/'):
+            continue
+        dest = (staging / rel.lstrip('/')).resolve()
+        # Never let a path escape the staging folder.
+        if not str(dest).startswith(str(staging.resolve())):
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        _download_to(download_url.format(urllib.parse.quote_plus(rel)), dest)
 
 
 class InstallUrlBody(BaseModel):
@@ -204,6 +266,15 @@ def list_extensions() -> list[dict]:
         }
         for g in registry._generators.values()
     ]
+    # Manifest-loaded extensions carry optional HF download metadata so the
+    # Models page can offer a weight download for them.
+    for ext in models + registry.process_tools():
+        manifest = registry.get_manifest(ext['id'])
+        if not manifest:
+            continue
+        for key in ('hfRepo', 'hf_skip_prefixes', 'hf_include_prefixes'):
+            if manifest.get(key) is not None:
+                ext[key] = manifest[key]
     return models + PROCESS_EXTENSIONS + registry.process_tools()
 
 
@@ -213,42 +284,73 @@ async def install_status() -> dict:
 
 
 @router.post('/install')
-async def install_from_github(body: InstallUrlBody) -> dict:
-    """Install an extension from a GitHub repository URL.
+async def install_extension(body: InstallUrlBody) -> dict:
+    """Install an extension from a GitHub / HuggingFace / ModelScope repository URL.
 
-    Downloads <repo>/archive/refs/heads/main.zip (falls back to master),
-    extracts it, validates manifest.json + generator.py/processor.py, copies
-    the folder into extensions/<id>/, and rescans the registry.
+    The download phase is dispatched by the URL host, but every source lands in
+    a staging folder that is validated + copied by the same `_install_from_folder`.
     """
     url = body.url.strip()
     if not url.startswith('http://') and not url.startswith('https://'):
         raise HTTPException(status_code=400, detail='Must be an http(s) URL')
-    # Normalize github.com/owner/repo → codeload zip
-    m = re.search(r'github\.com/([^/]+)/([^/?#]+)', url)
-    if not m:
-        raise HTTPException(status_code=400, detail='Must be a GitHub repository URL')
-    owner, repo = m.group(1), m.group(2).removesuffix('.git')
+
+    # Classify the source (150ms of work, fine outside the async task).
+    low = url.lower()
+    if 'github.com' in low:
+        source = 'github'
+        m = re.search(r'github\.com/([^/]+)/([^/?#]+)', url)
+        if not m:
+            raise HTTPException(status_code=400, detail='Must be a GitHub repository URL')
+        owner_repo = f"{m.group(1)}/{m.group(2).removesuffix('.git')}"
+    elif 'huggingface.co' in low or 'hf.co' in low:
+        source = 'huggingface'
+        owner_repo = _parse_hf(url)
+    elif 'modelscope.cn' in low:
+        source = 'modelscope'
+        owner_repo = '/'.join(_parse_ms(url))
+    else:
+        raise HTTPException(status_code=400, detail='Must be a GitHub, HuggingFace or ModelScope repository URL')
 
     async def run() -> None:
         async with _INSTALL_LOCK:
             staging = EXTENSIONS_DIR.parent / '.staging' / f'{int(time.time() * 1000)}'
-            zip_path = staging / 'repo.zip'
             try:
                 staging.mkdir(parents=True, exist_ok=True)
-                _set_progress('downloading', 0, f'Downloading {owner}/{repo}')
-                try:
-                    _download_zip(f'https://codeload.github.com/{owner}/{repo}/zip/refs/heads/main', zip_path)
-                except urllib.error.HTTPError:
-                    _download_zip(f'https://codeload.github.com/{owner}/{repo}/zip/refs/heads/master', zip_path)
+                _set_progress('downloading', 0, f'Downloading {owner_repo}')
 
-                _set_progress('extracting', 50, 'Extracting…')
-                with zipfile.ZipFile(zip_path) as zf:
-                    zf.extractall(staging)
+                if source == 'github':
+                    zip_path = staging / 'repo.zip'
+                    owner, repo = owner_repo.split('/', 1)
+                    try:
+                        _download_to(f'https://codeload.github.com/{owner}/{repo}/zip/refs/heads/main', zip_path)
+                    except urllib.error.HTTPError:
+                        _download_to(f'https://codeload.github.com/{owner}/{repo}/zip/refs/heads/master', zip_path)
+                    _set_progress('extracting', 50, 'Extracting…')
+                    with zipfile.ZipFile(zip_path) as zf:
+                        zf.extractall(staging)
+                    # codeload zips are <repo>-<ref>/… ; find the single root folder.
+                    extracted = [p for p in staging.iterdir() if p.is_dir() and p.name != '__MACOSX']
+                    source_folder = extracted[0] if extracted else staging
+                elif source == 'huggingface':
+                    paths = _hf_file_list(owner_repo)
+                    _download_repo_files(
+                        paths,
+                        f'https://huggingface.co/{owner_repo}/resolve/main/' + '{}',
+                        staging,
+                    )
+                    source_folder = staging
+                else:  # modelscope
+                    owner, repo = owner_repo.split('/', 1)
+                    paths = _ms_file_list(owner, repo)
+                    _download_repo_files(
+                        paths,
+                        f'https://modelscope.cn/api/v1/models/{owner}/{repo}/repo?Revision=master&FilePath=' + '{}',
+                        staging,
+                    )
+                    source_folder = staging
 
-                # codeload zips are <repo>-<ref>/… ; find the single root folder.
-                extracted = [p for p in staging.iterdir() if p.is_dir() and p.name != '__MACOSX']
-                source = extracted[0] if extracted else staging
-                _install_from_folder(source)
+                _set_progress('validating', 90, 'Validating…')
+                _install_from_folder(source_folder)
             except HTTPException as exc:
                 _set_progress('error', 0, exc.detail)
             except Exception as exc:  # noqa: BLE001
@@ -297,6 +399,61 @@ async def install_from_local(files: list[UploadFile], root_dir: str = Body(defau
     finally:
         shutil.rmtree(staging_root, ignore_errors=True)
     return result
+
+
+class InstallDirBody(BaseModel):
+    path: str
+
+
+@router.post('/install-dir')
+def install_from_dir(body: InstallDirBody) -> dict:
+    """Install an extension straight from a local folder path.
+
+    The folder comes from the main-process native directory dialog
+    (fs:selectFolder): a renderer webkitdirectory <input type=file> freezes /
+    crashes this machine's Chromium (mesh/image pickers had the same root
+    cause — 19e/19f/19h), so the renderer never touches the files. The backend
+    copies the tree server-side, then reuses the exact same validation +
+    install path as /install-local: manifest.json + generator.py/processor.py,
+    copy to extensions/<id>/, rescan, roll back on load failure.
+    """
+    src = Path(body.path).expanduser()
+    if not src.is_dir():
+        raise HTTPException(status_code=400, detail=f'folder not found: {src}')
+    src_res = src.resolve()
+    ext_res = EXTENSIONS_DIR.resolve()
+    # Refuse picking a meshforge-internal folder (extensions dir itself, an
+    # already-installed extension, or the staging area) — those would either
+    # self-copy recursively or trash an installed extension.
+    if src_res == ext_res or ext_res in src_res.parents or '.staging' in src_res.parts:
+        raise HTTPException(status_code=400, detail='pick the extension source folder (the one containing manifest.json), not a meshforge-internal directory')
+
+    # Sanity caps so an accidentally picked giant folder can't flood the disk.
+    total_bytes = 0
+    total_files = 0
+    try:
+        for p in src_res.rglob('*'):
+            if p.is_file():
+                try:
+                    total_bytes += p.stat().st_size
+                except OSError:
+                    continue
+                total_files += 1
+                if total_bytes > 64 * 1024 * 1024 or total_files > 2000:
+                    raise HTTPException(status_code=400, detail='folder too large (limit 64 MB / 2000 files)')
+    except HTTPException:
+        raise
+    except OSError:
+        raise HTTPException(status_code=400, detail=f'cannot read folder: {src}')
+
+    staging_root = EXTENSIONS_DIR.parent / '.staging' / f'local-{int(time.time() * 1000)}'
+    staging_root.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        # symlinks=True: copy links as-is instead of following (avoids cycles).
+        shutil.copytree(src_res, staging_root, symlinks=True)
+        return _install_from_folder(staging_root)
+    finally:
+        shutil.rmtree(staging_root, ignore_errors=True)
 
 
 class UninstallBody(BaseModel):

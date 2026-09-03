@@ -241,9 +241,14 @@ def _request_json(method: str, url: str, payload: dict | None = None, timeout: f
 
 
 def _mesh_relative(path: str) -> str:
-    """Normalize a mesh path for /process/mesh: strip scheme/host if a full URL."""
+    """Normalize a mesh path for /process/mesh: strip scheme/host if a full URL.
+
+    Keeps the query string (serve-file URLs carry the absolute path in
+    '?path=', which process._resolve_local needs).
+    """
     if path.startswith('http://') or path.startswith('https://'):
-        return urllib.parse.urlparse(path).path
+        p = urllib.parse.urlparse(path)
+        return p.path + (f'?{p.query}' if p.query else '')
     return path
 
 

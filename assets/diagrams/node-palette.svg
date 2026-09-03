@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 474" width="1440" height="474"
+     role="img" aria-label="MeshForge node types">
+  <title>MeshForge node types</title>
+  <desc>The nine built-in node types with their port types: Image, Text, Load 3D Mesh, Generate Mesh, Preview, Add to Scene, Wait, While and For Each.</desc>
+  <style>
+    .t1   { fill: #0d1526; }
+    .t2   { fill: #4a5768; }
+    .t3   { fill: #8b93a7; }
+    .card { fill: #f6f8fb; stroke: rgba(15,23,42,0.10); }
+    .box  { fill: #ffffff; stroke: rgba(15,23,42,0.13); }
+    .soft { fill: #eef2f8; }
+    .ln   { stroke: #9aa3b5; fill: #9aa3b5; }
+    .lnd  { stroke: #c2cad6; fill: #c2cad6; }
+    .ga   { stop-color: #2f6ee0; }
+    .gb   { stop-color: #7c3aed; }
+
+    @media (prefers-color-scheme: dark) {
+      .t1   { fill: #e6e8ee; }
+      .t2   { fill: #a9b1c3; }
+      .t3   { fill: #6b7386; }
+      .card { fill: #141922; stroke: rgba(255,255,255,0.09); }
+      .box  { fill: #1a1d25; stroke: rgba(255,255,255,0.12); }
+      .soft { fill: #1f2531; }
+      .ln   { stroke: #4a5164; fill: #4a5164; }
+      .lnd  { stroke: #333a48; fill: #333a48; }
+      .ga   { stop-color: #4f8cff; }
+      .gb   { stop-color: #a855f7; }
+    }
+
+    .sans { font-family: 'Segoe UI','Helvetica Neue',Inter,Arial,sans-serif; }
+    .mono { font-family: 'JetBrains Mono','SF Mono',Consolas,Menlo,monospace; }
+    .a    { stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+  </style>
+  <defs>
+    <linearGradient id="gw" x1="0" y1="0" x2="1" y2="1">
+      <stop class="ga" offset="0"/>
+      <stop class="gb" offset="1"/>
+    </linearGradient>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+            orient="auto-start-reverse">
+      <path d="M0 1L9 5L0 9z" class="ln" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <rect x="40" y="40" width="440" height="118" rx="12" class="card"/>
+  <rect x="60" y="64" width="12" height="12" rx="3" fill="#38bdf8"/>
+  <text x="84" y="76" class="sans t1" font-size="19" font-weight="600">Image</text>
+  <text x="60" y="102" class="sans t3" font-size="14">Pick the source photo</text>
+  <rect x="60" y="118" width="62" height="24" rx="12" fill="#38bdf8" fill-opacity="0.14" stroke="#38bdf8" stroke-opacity="0.55"/>
+  <text x="91" y="134" text-anchor="middle" class="mono" font-size="11.5" fill="#38bdf8">image</text>
+  <rect x="500" y="40" width="440" height="118" rx="12" class="card"/>
+  <rect x="520" y="64" width="12" height="12" rx="3" fill="#fbbf24"/>
+  <text x="544" y="76" class="sans t1" font-size="19" font-weight="600">Text</text>
+  <text x="520" y="102" class="sans t3" font-size="14">Prompt or extra parameters</text>
+  <rect x="520" y="118" width="54" height="24" rx="12" fill="#fbbf24" fill-opacity="0.14" stroke="#fbbf24" stroke-opacity="0.55"/>
+  <text x="547" y="134" text-anchor="middle" class="mono" font-size="11.5" fill="#fbbf24">text</text>
+  <rect x="960" y="40" width="440" height="118" rx="12" class="card"/>
+  <rect x="980" y="64" width="12" height="12" rx="3" fill="#a78bfa"/>
+  <text x="1004" y="76" class="sans t1" font-size="19" font-weight="600">Load 3D Mesh</text>
+  <text x="980" y="102" class="sans t3" font-size="14">Import an existing mesh</text>
+  <rect x="980" y="118" width="54" height="24" rx="12" fill="#a78bfa" fill-opacity="0.14" stroke="#a78bfa" stroke-opacity="0.55"/>
+  <text x="1007" y="134" text-anchor="middle" class="mono" font-size="11.5" fill="#a78bfa">mesh</text>
+  <rect x="40" y="178" width="440" height="118" rx="12" class="card"/>
+  <rect x="60" y="202" width="12" height="12" rx="3" fill="#34d399"/>
+  <text x="84" y="214" class="sans t1" font-size="19" font-weight="600">Generate Mesh</text>
+  <text x="60" y="240" class="sans t3" font-size="14">Run the generator model</text>
+  <rect x="60" y="256" width="62" height="24" rx="12" fill="none" stroke="#38bdf8" stroke-opacity="0.45"/>
+  <text x="91" y="272" text-anchor="middle" class="mono" font-size="11.5" fill="#38bdf8">image</text>
+  <path d="M132 268h14" class="ln a" marker-end="url(#arw)"/>
+  <rect x="156" y="256" width="54" height="24" rx="12" fill="#a78bfa" fill-opacity="0.14" stroke="#a78bfa" stroke-opacity="0.55"/>
+  <text x="183" y="272" text-anchor="middle" class="mono" font-size="11.5" fill="#a78bfa">mesh</text>
+  <rect x="500" y="178" width="440" height="118" rx="12" class="card"/>
+  <rect x="520" y="202" width="12" height="12" rx="3" fill="#38bdf8"/>
+  <text x="544" y="214" class="sans t1" font-size="19" font-weight="600">Preview</text>
+  <text x="520" y="240" class="sans t3" font-size="14">Inspect in the 3D viewport</text>
+  <rect x="520" y="256" width="54" height="24" rx="12" fill="none" stroke="#a78bfa" stroke-opacity="0.45"/>
+  <text x="547" y="272" text-anchor="middle" class="mono" font-size="11.5" fill="#a78bfa">mesh</text>
+  <path d="M584 268h14" class="ln a" marker-end="url(#arw)"/>
+  <rect x="608" y="256" width="54" height="24" rx="12" fill="#a78bfa" fill-opacity="0.14" stroke="#a78bfa" stroke-opacity="0.55"/>
+  <text x="635" y="272" text-anchor="middle" class="mono" font-size="11.5" fill="#a78bfa">mesh</text>
+  <rect x="960" y="178" width="440" height="118" rx="12" class="card"/>
+  <rect x="980" y="202" width="12" height="12" rx="3" fill="#a78bfa"/>
+  <text x="1004" y="214" class="sans t1" font-size="19" font-weight="600">Add to Scene</text>
+  <text x="980" y="240" class="sans t3" font-size="14">Hand the result to the scene</text>
+  <rect x="980" y="256" width="54" height="24" rx="12" fill="none" stroke="#a78bfa" stroke-opacity="0.45"/>
+  <text x="1007" y="272" text-anchor="middle" class="mono" font-size="11.5" fill="#a78bfa">mesh</text>
+  <rect x="40" y="316" width="440" height="118" rx="12" class="card"/>
+  <rect x="60" y="340" width="12" height="12" rx="3" fill="#71717a"/>
+  <text x="84" y="352" class="sans t1" font-size="19" font-weight="600">Wait</text>
+  <text x="60" y="378" class="sans t3" font-size="14">Pause between steps</text>
+  <rect x="60" y="394" width="46" height="24" rx="12" fill="none" stroke="#8b93a7" stroke-opacity="0.45"/>
+  <text x="83" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
+  <path d="M116 406h14" class="ln a" marker-end="url(#arw)"/>
+  <rect x="140" y="394" width="46" height="24" rx="12" fill="#8b93a7" fill-opacity="0.14" stroke="#8b93a7" stroke-opacity="0.55"/>
+  <text x="163" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
+  <rect x="500" y="316" width="440" height="118" rx="12" class="card"/>
+  <rect x="520" y="340" width="12" height="12" rx="3" fill="#f59e0b"/>
+  <text x="544" y="352" class="sans t1" font-size="19" font-weight="600">While</text>
+  <text x="520" y="378" class="sans t3" font-size="14">Loop while a condition holds</text>
+  <rect x="520" y="394" width="46" height="24" rx="12" fill="none" stroke="#8b93a7" stroke-opacity="0.45"/>
+  <text x="543" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
+  <path d="M576 406h14" class="ln a" marker-end="url(#arw)"/>
+  <rect x="600" y="394" width="46" height="24" rx="12" fill="#8b93a7" fill-opacity="0.14" stroke="#8b93a7" stroke-opacity="0.55"/>
+  <text x="623" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
+  <rect x="960" y="316" width="440" height="118" rx="12" class="card"/>
+  <rect x="980" y="340" width="12" height="12" rx="3" fill="#38bdf8"/>
+  <text x="1004" y="352" class="sans t1" font-size="19" font-weight="600">For Each</text>
+  <text x="980" y="378" class="sans t3" font-size="14">Iterate over a list</text>
+  <rect x="980" y="394" width="46" height="24" rx="12" fill="none" stroke="#8b93a7" stroke-opacity="0.45"/>
+  <text x="1003" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
+  <path d="M1036 406h14" class="ln a" marker-end="url(#arw)"/>
+  <rect x="1060" y="394" width="46" height="24" rx="12" fill="#8b93a7" fill-opacity="0.14" stroke="#8b93a7" stroke-opacity="0.55"/>
+  <text x="1083" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
+</svg>

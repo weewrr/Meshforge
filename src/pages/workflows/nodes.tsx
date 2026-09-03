@@ -4,7 +4,9 @@ import type { ParamSchema, PortType, WFNodeData } from '../../types'
 import { IN_HANDLE, OUT_HANDLE, getExtensionById, nodePorts, nodeSpec } from '../../types'
 import { useWorkflowsStore } from '../../stores/workflows'
 import { useWorkflowRunStore, type NodeState } from '../../stores/workflowRun'
-import { uploadFile } from '../../api'
+import { useLogsStore } from '../../stores/logs'
+import { importImageByPath, importMeshByPath } from '../../api'
+import { useT } from '../../i18n'
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
 
@@ -91,42 +93,44 @@ function useParam(nodeId: string) {
   return (key: string, value: unknown) => updateNodeData(nodeId, { [key]: value })
 }
 
-function UploadButton({
+function ImageFileButton({
   nodeId,
-  accept,
   label,
   current,
   onUploaded
 }: {
   nodeId: string
-  accept: string
   label: string
   current?: string
   onUploaded?: (fileName: string) => void
 }) {
+  const t = useT()
   const setParam = useParam(nodeId)
   const [busy, setBusy] = useState(false)
 
-  // Imperative file input — committing a hidden <input type="file"> through React
-  // freezes the renderer on some Electron builds. Create it on demand instead.
-  function pickFromDisk(): void {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = accept
-    input.onchange = async () => {
-      const file = input.files?.[0]
-      if (!file) return
-      setBusy(true)
-      try {
-        const { url, fileName } = await uploadFile(file)
-        setParam('url', url)
-        setParam('fileName', fileName)
-        onUploaded?.(fileName)
-      } finally {
-        setBusy(false)
-      }
+  // Native-dialog image picker (Modly-aligned) — mirrors MeshFileButton below.
+  // Chromium <input type=file> freezes this machine's renderer (see HANDOFF
+  // §6), so images are picked in the main process and imported by path.
+  async function pickFromDisk(): Promise<void> {
+    if (!window.meshforge?.selectImageFile) {
+      useLogsStore.getState().warn('[imageNode] native file dialog unavailable (browser-only run)')
+      return
     }
-    input.click()
+    const filePath = await window.meshforge.selectImageFile()
+    if (!filePath) return
+    setBusy(true)
+    try {
+      const { url, fileName } = await importImageByPath(filePath)
+      setParam('url', url)
+      setParam('fileName', fileName)
+      onUploaded?.(fileName)
+      useLogsStore.getState().log('info', `[imageNode] imported ${fileName}`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      useLogsStore.getState().error(`[imageNode] import failed: ${msg}`)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -134,11 +138,57 @@ function UploadButton({
       <button
         className="wf-upload__btn"
         disabled={busy}
-        onClick={pickFromDisk}
+        onClick={() => void pickFromDisk()}
       >
-        {busy ? '上传中…' : label}
+        {busy ? t('workflows.nodes.importing') : label}
       </button>
-      <span className="wf-upload__name">{current || '未选择文件'}</span>
+      <span className="wf-upload__name">{current || t('workflows.nodes.noFileSelected')}</span>
+    </div>
+  )
+}
+
+/**
+ * Native-dialog mesh picker for Load 3D Mesh nodes (Modly-aligned).
+ *
+ * Mirrors the Generate-page Import→Mesh flow: the Electron main process opens
+ * the file dialog and only returns an absolute path; the backend serves the
+ * file (or a trimesh-converted GLB) through /optimize/import-by-path. No
+ * Chromium <input type=file> is involved — that freezes the renderer on this
+ * machine (see HANDOFF §6).
+ */
+function MeshFileButton({ nodeId, label, current }: { nodeId: string; label: string; current?: string }) {
+  const t = useT()
+  const setParam = useParam(nodeId)
+  const [busy, setBusy] = useState(false)
+
+  async function pickNative(): Promise<void> {
+    if (!window.meshforge?.selectMeshFile) {
+      useLogsStore.getState().warn('[meshNode] native file dialog unavailable (browser-only run)')
+      return
+    }
+    const filePath = await window.meshforge.selectMeshFile()
+    if (!filePath) return
+    setBusy(true)
+    try {
+      const { url } = await importMeshByPath(filePath)
+      const fileName = filePath.split(/[\\/]/).pop() ?? filePath
+      setParam('url', url)
+      setParam('fileName', fileName)
+      useLogsStore.getState().log('info', `[meshNode] imported ${fileName}`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      useLogsStore.getState().error(`[meshNode] import failed: ${msg}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="wf-upload">
+      <button className="wf-upload__btn" disabled={busy} onClick={() => void pickNative()}>
+        {busy ? t('workflows.nodes.importing') : label}
+      </button>
+      <span className="wf-upload__name">{current || t('workflows.nodes.noFileSelected')}</span>
     </div>
   )
 }
@@ -146,9 +196,10 @@ function UploadButton({
 // ─── Node components ──────────────────────────────────────────────────────────
 
 export function ImageNode({ id, data }: NodeProps<Node<WFNodeData>>) {
+  const t = useT()
   return (
     <NodeShell id={id} type="imageNode" label={data.label}>
-      <UploadButton nodeId={id} accept="image/*" label="选择图片" current={String(data.params.fileName ?? '')} />
+      <ImageFileButton nodeId={id} label={t('workflows.nodes.selectImage')} current={String(data.params.fileName ?? '')} />
     </NodeShell>
   )
 }
@@ -168,14 +219,10 @@ export function TextNode({ id, data }: NodeProps<Node<WFNodeData>>) {
 }
 
 export function MeshNode({ id, data }: NodeProps<Node<WFNodeData>>) {
+  const t = useT()
   return (
     <NodeShell id={id} type="meshNode" label={data.label}>
-      <UploadButton
-        nodeId={id}
-        accept=".glb,.gltf,.obj"
-        label="选择网格文件"
-        current={String(data.params.fileName ?? '')}
-      />
+      <MeshFileButton nodeId={id} label={t('workflows.nodes.selectMeshFile')} current={String(data.params.fileName ?? '')} />
     </NodeShell>
   )
 }
@@ -195,22 +242,25 @@ export function GeneratorNode({ id, data }: NodeProps<Node<WFNodeData>>) {
 }
 
 export function PreviewNode({ id, data }: NodeProps<Node<WFNodeData>>) {
+  const t = useT()
   return (
     <NodeShell id={id} type="previewNode" label={data.label}>
-      <span className="wf-hint">在查看器中显示上游网格</span>
+      <span className="wf-hint">{t('workflows.nodes.previewHint')}</span>
     </NodeShell>
   )
 }
 
 export function OutputNode({ id, data }: NodeProps<Node<WFNodeData>>) {
+  const t = useT()
   return (
     <NodeShell id={id} type="outputNode" label={data.label}>
-      <span className="wf-hint">输出到场景</span>
+      <span className="wf-hint">{t('workflows.nodes.outputHint')}</span>
     </NodeShell>
   )
 }
 
 export function WaitNode({ id, data }: NodeProps<Node<WFNodeData>>) {
+  const t = useT()
   const paused = useWorkflowRunStore((s) => s.runState === 'paused' && s.nodeStates[id] === 'waiting')
   const continueRun = useWorkflowRunStore((s) => s.continueRun)
 
@@ -218,10 +268,10 @@ export function WaitNode({ id, data }: NodeProps<Node<WFNodeData>>) {
     <NodeShell id={id} type="waitNode" label={data.label}>
       {paused ? (
         <button className="wf-wait-btn nodrag" onClick={continueRun}>
-          ▶ 继续
+          ▶ {t('workflows.nodes.continue')}
         </button>
       ) : (
-        <span className="wf-hint">运行到此暂停，等待用户继续</span>
+        <span className="wf-hint">{t('workflows.nodes.waitHint')}</span>
       )}
     </NodeShell>
   )
@@ -232,6 +282,7 @@ export function WaitNode({ id, data }: NodeProps<Node<WFNodeData>>) {
 // the contained nodes each iteration. Child nodes render on top of the frame
 // via React Flow's parentId mechanism.
 export function WhileNode({ id, data, selected }: NodeProps<Node<WFNodeData>>) {
+  const t = useT()
   const setParam = useParam(id)
   const state = useWorkflowRunStore((s) => s.nodeStates[id] ?? 'pending')
   const running = state === 'running'
@@ -258,15 +309,24 @@ export function WhileNode({ id, data, selected }: NodeProps<Node<WFNodeData>>) {
         <span className="wf-while__glyph">↻</span>
         <span className="wf-while__title">{data.label}</span>
         <label className="wf-while__loop">
-          <span>loop</span>
+          <span>{t('workflows.nodes.loop')}</span>
           <input
             className="wf-while__num"
-            type="number"
-            min={0}
+            // Not type="number" — painting number inputs inside the canvas
+            // natively crashes this machine's renderer (see ParamControl).
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            spellCheck={false}
             defaultValue={Number(data.params.iterations ?? 0)}
             disabled={runState === 'running' || runState === 'paused'}
             onPointerDown={(e) => e.stopPropagation()}
-            onChange={(e) => setParam('iterations', Math.max(0, Number(e.target.value) || 0))}
+            onChange={(e) => {
+              const raw = e.target.value
+              if (raw !== '' && raw !== '-' && !/^-?\d*$/.test(raw)) return
+              const n = parseInt(raw, 10)
+              if (!isNaN(n)) setParam('iterations', Math.max(0, n))
+            }}
           />
           <span>×</span>
         </label>
@@ -274,59 +334,60 @@ export function WhileNode({ id, data, selected }: NodeProps<Node<WFNodeData>>) {
         {isPaused && (
           <div className="wf-while__actions">
             <button className="wf-while__btn wf-while__btn--continue" onClick={continueWhile}>
-              ▶ Continue
+              ▶ {t('workflows.nodes.continue')}
             </button>
             <button className="wf-while__btn" onClick={retryWhile}>
-              ↻ Retry
+              ↻ {t('workflows.nodes.retry')}
             </button>
           </div>
         )}
       </div>
 
       <div className="wf-while__body">
-        <span className="wf-while__hint">{isPaused ? '暂停 — Continue 继续 / Retry 重跑' : '拖入节点作为循环体'}</span>
+        <span className="wf-while__hint">{isPaused ? t('workflows.nodes.whilePaused') : t('workflows.nodes.whileBodyHint')}</span>
       </div>
     </div>
   )
 }
 
 export function ForEachNode({ id, data }: NodeProps<Node<WFNodeData>>) {
+  const t = useT()
   const setParam = useParam(id)
   const runState = useWorkflowRunStore((s) => s.runState)
   const locked = runState === 'running' || runState === 'paused'
   return (
     <NodeShell id={id} type="forEachNode" label={data.label}>
       <label className="wf-field">
-        <span>迭代模式</span>
+        <span>{t('workflows.nodes.iterModeLabel')}</span>
         <select
           className="wf-input nodrag"
           defaultValue={String(data.params.mode ?? 'image')}
           disabled={locked}
           onChange={(e) => setParam('mode', e.target.value)}
         >
-          <option value="image">图片目录</option>
-          <option value="text">文本目录</option>
+          <option value="image">{t('workflows.nodes.iterImage')}</option>
+          <option value="text">{t('workflows.nodes.iterText')}</option>
         </select>
       </label>
       <label className="wf-field">
-        <span>工作区目录（如 uploads）</span>
+        <span>{t('workflows.nodes.workspaceDirLabel')}</span>
         <input
           className="wf-input"
           type="text"
           defaultValue={String(data.params.dir ?? '')}
-          placeholder="留空则用逗号列表"
+          placeholder={t('workflows.nodes.workspaceDirPlaceholder')}
           disabled={locked}
           onChange={(e) => setParam('dir', e.target.value)}
         />
       </label>
       <label className="wf-field">
-        <span>条目（逗号分隔，目录留空时）</span>
+        <span>{t('workflows.nodes.itemsLabel')}</span>
         <input
           className="wf-input"
           type="text"
           defaultValue={String(data.params.items ?? '')}
           disabled={locked}
-          placeholder="view 1, view 2"
+          placeholder={t('workflows.nodes.itemsPlaceholder')}
           onChange={(e) => setParam('items', e.target.value)}
         />
       </label>
@@ -362,17 +423,27 @@ function ParamControl({
     )
   }
   if (param.type === 'int' || param.type === 'float') {
+    // Chromium on this machine natively crashes when <input type="number"> is
+    // painted inside the React Flow canvas (verified: any node with a number
+    // input kills the renderer, exit 0xC0000005 / 0x7003). Modly parity: use a
+    // text input + inputMode + regex gate and parse on change instead.
+    const isFloat = param.type === 'float'
     return (
       <input
         className="wf-input wf-input--num nodrag"
-        type="number"
-        step={param.type === 'float' ? 0.01 : 1}
+        type="text"
+        inputMode={isFloat ? 'decimal' : 'numeric'}
+        autoComplete="off"
+        spellCheck={false}
         min={param.min}
         max={param.max}
         defaultValue={value}
         onPointerDown={(e) => e.stopPropagation()}
         onChange={(e) => {
-          const n = param.type === 'float' ? parseFloat(e.target.value) : parseInt(e.target.value, 10)
+          const raw = isFloat ? e.target.value.replace(',', '.') : e.target.value
+          // Allow transient states while typing ('', '-', '1.', '-1' …).
+          if (raw !== '' && raw !== '-' && !(isFloat ? /^-?\d*\.?\d*$/.test(raw) : /^-?\d*$/.test(raw))) return
+          const n = isFloat ? parseFloat(raw) : parseInt(raw, 10)
           if (!isNaN(n)) onChange(n)
         }}
       />
@@ -391,9 +462,10 @@ function ParamControl({
 }
 
 export function ExtensionNode({ id, data }: NodeProps<Node<WFNodeData>>) {
+  const t = useT()
   const setParam = useParam(id)
   const ext = getExtensionById(String(data.extensionId ?? ''))
-  const label = ext?.display_name ?? 'Extension'
+  const label = ext?.display_name ?? t('workflows.nodes.extension')
   const inputType = (ext?.input ?? 'any') as PortType
   const outputType = (ext?.output ?? 'mesh') as PortType
   const hasParams = (ext?.params.length ?? 0) > 0

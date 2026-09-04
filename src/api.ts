@@ -71,10 +71,16 @@ export async function submitImage(
   const passthrough = { ...params }
   delete passthrough.generatorId
   form.append('params_json', JSON.stringify(passthrough))
-  const res = await fetch(`${API_BASE}/generate/from-image`, {
-    method: 'POST',
-    body: form
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}/generate/from-image`, {
+      method: 'POST',
+      body: form
+    })
+  } catch (e) {
+    const why = e instanceof Error ? e.message : String(e)
+    throw new Error(`submitImage: ${why} (POST ${API_BASE}/generate/from-image, generator=${generatorId}, image=${image.name})`)
+  }
   if (!res.ok) {
     const detail = await res.text()
     throw new Error(`submit failed: ${res.status} ${detail}`)
@@ -83,7 +89,13 @@ export async function submitImage(
 }
 
 export async function getJob(jobId: string): Promise<JobStatus> {
-  const res = await fetch(`${API_BASE}/generate/jobs/${jobId}`)
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}/generate/jobs/${jobId}`)
+  } catch (e) {
+    const why = e instanceof Error ? e.message : String(e)
+    throw new Error(`getJob: ${why} (GET ${API_BASE}/generate/jobs/${jobId})`)
+  }
   if (!res.ok) throw new Error(`job status failed: ${res.status}`)
   return res.json()
 }

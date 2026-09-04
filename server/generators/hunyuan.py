@@ -23,7 +23,9 @@ from .base import BaseGenerator, GenerationCancelled, ProgressFn
 
 def _service_url() -> str:
     import os
-    return os.environ.get('MESHFORGE_HUNYUAN_URL', 'http://127.0.0.1:8000').rstrip('/')
+    # Default matches server/hunyuan_service.py (--port 8767). Set
+    # MESHFORGE_HUNYUAN_URL to point at a different inference endpoint.
+    return os.environ.get('MESHFORGE_HUNYUAN_URL', 'http://127.0.0.1:8767').rstrip('/')
 
 
 def _multipart_post(url: str, image_path: Path, fields: dict) -> bytes:
@@ -60,6 +62,21 @@ class Hunyuan3DGenerator(BaseGenerator):
     params = [
         {'id': 'steps', 'label': '采样步数', 'type': 'int', 'default': 20, 'min': 5, 'max': 100},
         {'id': 'guidance', 'label': '引导强度', 'type': 'float', 'default': 4.0, 'min': 1.0, 'max': 10.0},
+        {'id': 'octree', 'label': '重建分辨率', 'type': 'select', 'default': 256,
+         'options': [
+             {'value': 256, 'label': '标准 256（省显存）'},
+             {'value': 320, 'label': '精细 320（推荐）'},
+             {'value': 384, 'label': '最高 384（细节最佳，6GB 显存有 OOM 风险）'},
+         ],
+         'tooltip': '体积重建分辨率：越高表面细节越丰富，显存与耗时随之增加'},
+        {'id': 'seed', 'label': '随机种子', 'type': 'int', 'default': -1, 'min': -1, 'max': 999_999_999,
+         'tooltip': '-1 = 每次随机；固定为某个正数可复现同一结果，换种子多试几次挑最佳'},
+        {'id': 'remove_base', 'label': '去底部圆盘', 'type': 'select', 'default': 1,
+         'options': [
+             {'value': 1, 'label': '开启（推荐）'},
+             {'value': 0, 'label': '关闭（保留底座）'},
+         ],
+         'tooltip': '自动检测并移除模型底部由地面阴影产生的支撑圆盘（保留真实底座设计时选关闭）'},
     ]
 
     def __init__(self) -> None:
@@ -100,7 +117,13 @@ class Hunyuan3DGenerator(BaseGenerator):
             payload = _multipart_post(
                 f'{self._url}/generate',
                 image_path,
-                {'steps': str(int(params.get('steps', 20))), 'guidance': str(float(params.get('guidance', 4.0)))},
+                {
+                    'steps': str(int(params.get('steps', 20))),
+                    'guidance': str(float(params.get('guidance', 4.0))),
+                    'octree': str(int(params.get('octree', 256))),
+                    'seed': str(int(params.get('seed', -1))),
+                    'remove_base': str(1 if int(params.get('remove_base', 1)) != 0 else 0),
+                },
             )
         except (URLError, HTTPError, OSError) as exc:
             raise RuntimeError(f'Hunyuan3D 调用失败: {exc}') from exc

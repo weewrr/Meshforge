@@ -43,6 +43,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+/** Extension nodes store their id on data.extensionId (canvas), while some
+ *  serialized workflows may carry it inside data.params.extensionId instead.
+ *  Resolve from either location so the runner never drops the id. */
+function nodeExtensionId(node: WFNode): string {
+  const data = (node.data ?? {}) as Record<string, unknown>
+  const p = (data.params ?? {}) as Record<string, unknown>
+  return String(p.extensionId ?? data.extensionId ?? '')
+}
+
 /** Kahn topological sort. Any leftover nodes (shouldn't happen — the canvas
  *  forbids cycles) are appended in declaration order. */
 export function topoSort(nodes: WFNode[], edges: WFEdge[]): string[] {
@@ -125,7 +134,18 @@ function whileBodyNodes(w: WFNode, nodes: WFNode[]): WFNode[] {
 }
 
 async function urlToFile(url: string, name: string): Promise<File> {
-  const res = await fetch(fullUrl(url))
+  const full = fullUrl(url)
+  let res: Response
+  try {
+    // no-store: the same asset is usually loaded earlier by an <img> (no-cors),
+    // which leaves a cached entry without CORS validation info — a subsequent
+    // cors-mode fetch would fail against that cache entry without any network
+    // request. Force a full revalidation over the wire.
+    res = await fetch(full, { cache: 'no-store' })
+  } catch (e) {
+    const why = e instanceof Error ? e.message : String(e)
+    throw new Error(`urlToFile: ${why} (GET ${full})`)
+  }
   if (!res.ok) throw new Error(`fetch input failed: ${res.status}`)
   const blob = await res.blob()
   return new File([blob], name, { type: blob.type || 'image/png' })
@@ -256,7 +276,7 @@ export const useWorkflowRunStore = create<WorkflowRunState>((set, get) => {
       }
 
       case 'extensionNode': {
-        const extensionId = String(params.extensionId ?? '')
+        const extensionId = nodeExtensionId(node)
         const ext = getExtensionById(extensionId)
         if (!ext) throw new Error(`${label}: unknown extension '${extensionId}'`)
         if (ext.kind === 'process') {
@@ -392,7 +412,7 @@ export const useWorkflowRunStore = create<WorkflowRunState>((set, get) => {
           issues.push(`${label}: 需要上游图片连接`)
         }
         if (node.type === 'extensionNode') {
-          const ext = getExtensionById(String(params.extensionId ?? ''))
+          const ext = getExtensionById(nodeExtensionId(node))
           if (!ext) {
             issues.push(`${label}: 未知扩展`)
           } else if (!hasIncoming) {

@@ -307,7 +307,7 @@ def _build_workflow_graph(name: str, description: str, input_type: str, steps: l
                 'label': str(step['extension_id']),
                 'color': NODE_COLORS['extensionNode'],
                 'extensionId': step['extension_id'],
-                'params': dict(step.get('params') or {}),
+                'params': {'extensionId': step['extension_id'], **dict(step.get('params') or {})},
             },
         })
 

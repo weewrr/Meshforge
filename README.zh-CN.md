@@ -190,7 +190,7 @@ sequenceDiagram
 
 - 建议使用 ≥ 6 GB 显存的 GPU（开发机为 **RTX 4050 6G**）
 
-- 默认自带一个 **mock** 生成器；如需真实推理，请通过[扩展](#扩展)接入真实模型。
+- 默认自带一个 **mock** 生成器；如需真实推理，可通过[扩展](#扩展)接入，或使用下方内置的 **Hunyuan3D-2-mini** 适配器。
 
 ### 安装与运行
 
@@ -210,6 +210,71 @@ npm run build      # 生产构建
 | `npm run build`          | 生产构建                |
 | `npm run typecheck:web`  | TypeScript 检查（渲染层） |
 | `npm run typecheck:node` | TypeScript 检查（主进程） |
+
+***
+
+## 本地 Hunyuan3D-2-mini 推理
+
+MeshForge 默认附带 CPU **mock 浮雕**生成器，UI 开箱即用。若要在本地 GPU（**≥ 6 GB 显存**）上运行真正的 **图片 → 3D 网格**：
+
+1. 将权重下载到本地目录，例如 `D:\github\models\Hunyuan3D-2mini\` —— 仓库 `tencent/Hunyuan3D-2mini`，子目录 `hunyuan3d-dit-v2-mini`、`hunyuan3d-vae-v2-mini`、`hunyuan3d-vae-v2-mini-withencoder`。
+2. 创建 **Python 3.11** 环境，安装 CUDA 版 PyTorch 与 `hy3dgen==2.0.2` 及其运行时依赖 —— 见 `server/requirements-hunyuan.txt`。
+3. 启动推理服务：
+   ```
+   scripts\start-hunyuan-server.bat        # 监听 http://127.0.0.1:8767
+   ```
+4. 在界面中选择 **Hunyuan3D 2 mini (Real)** 生成器。适配器
+   （`server/generators/hunyuan.py`）会探测 `/health` 并把图片 POST 到
+   `/generate`，保存返回的 GLB —— 只要服务运行在默认端口就无需额外配置
+   （可用 `MESHFORGE_HUNYUAN_URL` 覆盖）。
+
+生成参数（在工作流节点上设置）：
+
+| 参数 | 默认 | 作用 |
+|---|---|---|
+| `steps` 采样步数 | 20 | 去噪步数；6GB 显存下 20–30 是甜点区间 |
+| `guidance` 引导强度 | 4.0 | 结果贴合输入图的程度（4–7 常用；>10 易过曝） |
+| `octree` 重建分辨率 | 256 | 体积重建分辨率：256 / 320 / 384，越高表面细节越丰富，显存与耗时增加（6GB 卡 384 有爆显存风险） |
+| `seed` 随机种子 | -1 | `-1` = 每次随机；固定为正数可复现同一结果 —— 换多个种子各跑一次，留下最满意的一个 |
+| `remove_base` 去底部圆盘 | 开启 | 自动切除模型底部由地面阴影产生的支撑圆盘（单图重建模型的常见产物）——需要保留真实底座设计时关闭 |
+
+设计说明：轻量的 MeshForge 后端不引入 PyTorch —— 模型运行在独立进程（`server/hunyuan_service.py`，Python 3.11 + CUDA 环境）中，与适配器之间只约定 `GET /health` 与 `POST /generate`（multipart 图片 → GLB）两个接口。
+
+***
+
+## MCP Server（Claude Desktop / Codex）
+
+通过 [Model Context Protocol](https://modelcontextprotocol.io) 把 MeshForge 暴露给外部 AI 智能体。后端本身运行在 `http://127.0.0.1:8766`（启动应用，或 `uvicorn main:app`）；`server/mcp_server.py` 是一个极薄的 stdio 适配层：
+
+| 工具 | 作用 |
+|---|---|
+| `meshforge_health` | 后端可达性检查 |
+| `meshforge_list_generators` | 已注册的生成器、加载状态与参数 |
+| `meshforge_generate_from_image` | 提交任务：图片路径 + 生成器（默认 `hunyuan3d-2-mini`）+ 可选 `steps` / `guidance` / `octree` / `seed` / `remove_base` |
+| `meshforge_get_job_status` | 轮询任务；成功后同时给出服务 URL 与磁盘上的 `.glb` 绝对路径 |
+| `meshforge_cancel_job` | 协作式取消 |
+| `meshforge_import_mesh` | 把已有的 `.glb` / `.obj` / `.stl` / `.ply` 导入工作区 |
+
+MCP 依赖刻意保持可选（不污染精简版后端 venv）：
+
+```
+server\.venv\Scripts\python.exe -m pip install -r server\requirements-mcp.txt
+```
+
+Claude Desktop —— 在 `~/.config/claude/claude_desktop_config.json` 中添加：
+
+```json
+{
+  "mcpServers": {
+    "meshforge": {
+      "command": "C:/Users/HELLOWORLD/Desktop/oss/meshforge/server/.venv/Scripts/python.exe",
+      "args": ["C:/Users/HELLOWORLD/Desktop/oss/meshforge/server/mcp_server.py"]
+    }
+  }
+}
+```
+
+请把两处绝对路径改为你本地的克隆路径。要进行真实 GPU 生成，还需要 :8767 的 Hunyuan 推理服务在运行（见上一节）。随时可用 `python scripts\test_mcp_stdio.py` 做握手冒烟测试。
 
 ***
 
@@ -247,7 +312,7 @@ npm run build      # 生产构建
 
 - [x] 崩溃恢复、后端看门狗、安装回滚
 
-- [ ] 接入真实的 **Hunyuan3D-2-mini** 推理模型（当前为 mock）
+- [x] 接入真实的 **Hunyuan3D-2-mini** 推理模型（本地 GPU，图生网格）
 
 ***
 

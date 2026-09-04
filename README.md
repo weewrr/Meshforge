@@ -188,7 +188,7 @@ sequenceDiagram
 
 - A GPU with ≥ 6 GB VRAM recommended (developed on an **RTX 4050 6G**)
 
-- Ships with a **mock** generator by default; wire in a real model via [Extensions](#extensions) for true inference.
+- Ships with a **mock** generator by default; wire in a real model via [Extensions](#extensions) — or the built-in Hunyuan3D-2-mini adapter below — for true inference.
 
 ### Install & Run
 
@@ -208,6 +208,71 @@ npm run build      # production bundle
 | `npm run build`          | Production build            |
 | `npm run typecheck:web`  | TypeScript check (renderer) |
 | `npm run typecheck:node` | TypeScript check (main)     |
+
+***
+
+## Local Hunyuan3D-2-mini Inference
+
+MeshForge ships with a CPU *mock relief* generator so the whole UI works out of the box. To generate true **image → 3D mesh** results with Hunyuan3D-2-mini on a local GPU (**≥ 6 GB VRAM**):
+
+1. Download the weights to a local folder, e.g. `D:\github\models\Hunyuan3D-2mini\` — repo `tencent/Hunyuan3D-2mini`, subfolders `hunyuan3d-dit-v2-mini`, `hunyuan3d-vae-v2-mini`, `hunyuan3d-vae-v2-mini-withencoder`.
+2. Create a **Python 3.11** environment with CUDA PyTorch and install `hy3dgen==2.0.2` plus its runtime deps — see `server/requirements-hunyuan.txt`.
+3. Start the inference service:
+   ```
+   scripts\start-hunyuan-server.bat        # listens on http://127.0.0.1:8767
+   ```
+4. In the UI pick the **Hunyuan3D 2 mini (Real)** generator. The adapter
+   (`server/generators/hunyuan.py`) probes `/health` and POSTs the image to
+   `/generate`, saving the returned GLB — no extra config as long as the
+   service runs on the default port (override with `MESHFORGE_HUNYUAN_URL`).
+
+Generation parameters (set on the workflow node):
+
+| Param | Default | Effect |
+|---|---|---|
+| `steps` | 20 | Denoising steps; 20–30 is the sweet spot on a 6 GB GPU |
+| `guidance` | 4.0 | How tightly the result follows the input image (4–7 typical; >10 over-saturates) |
+| `octree` | 256 | Volume reconstruction resolution — 256 / 320 / 384; higher = finer surface detail, more VRAM & time (384 risks OOM on 6 GB) |
+| `seed` | -1 | `-1` = random each run; fix a positive value to reproduce a result — run several seeds and keep the best |
+| `remove_base` | on | Cut the thin support disc the model often adds under the object (ground-shadow artefact) — turn off to keep a genuine base design |
+
+Design note: the lightweight MeshForge backend stays free of PyTorch — the model runs in a separate process (`server/hunyuan_service.py`, Python 3.11 + CUDA venv) that shares a minimal `/health` + `/generate` (multipart image → GLB) contract with the adapter.
+
+***
+
+## MCP Server (Claude Desktop / Codex)
+
+Expose MeshForge to external AI agents through the [Model Context Protocol](https://modelcontextprotocol.io). The backend already runs on `http://127.0.0.1:8766` (start the app, or `uvicorn main:app`); `server/mcp_server.py` is a thin stdio adapter over it:
+
+| Tool | Purpose |
+|---|---|
+| `meshforge_health` | Backend reachability check |
+| `meshforge_list_generators` | Registered generators, load state and parameters |
+| `meshforge_generate_from_image` | Submit a job: image path + generator (default `hunyuan3d-2-mini`) + optional `steps` / `guidance` / `octree` / `seed` / `remove_base` |
+| `meshforge_get_job_status` | Poll a job; on success reports the served URL **and** the absolute `.glb` path on disk |
+| `meshforge_cancel_job` | Cooperative cancellation |
+| `meshforge_import_mesh` | Import an existing `.glb` / `.obj` / `.stl` / `.ply` into the workspace |
+
+MCP deps are optional on purpose (kept out of the lean backend venv):
+
+```
+server\.venv\Scripts\python.exe -m pip install -r server\requirements-mcp.txt
+```
+
+Claude Desktop — add to `~/.config/claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "meshforge": {
+      "command": "C:/Users/HELLOWORLD/Desktop/oss/meshforge/server/.venv/Scripts/python.exe",
+      "args": ["C:/Users/HELLOWORLD/Desktop/oss/meshforge/server/mcp_server.py"]
+    }
+  }
+}
+```
+
+Adjust the two absolute paths to your clone location. For real GPU generation the Hunyuan inference service on `:8767` must also be running (section above). Smoke-test the handshake anytime with `python scripts\test_mcp_stdio.py`.
 
 ***
 
@@ -245,7 +310,7 @@ Dependency-free internalization layer (Zustand + `localStorage`). Switch under *
 
 - [x] Crash recovery, backend watchdog, install rollback
 
-- [ ] Wire the real **Hunyuan3D-2-mini** inference model (currently mock)
+- [x] Wire the real **Hunyuan3D-2-mini** inference model (local GPU, image → mesh)
 
 ***
 

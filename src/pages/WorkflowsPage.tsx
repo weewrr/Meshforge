@@ -727,7 +727,10 @@ function createNodeFromPayload(payload: string, position: { x: number; y: number
         label: ext?.display_name ?? 'Extension',
         color: spec.color,
         extensionId,
-        params: Object.fromEntries((ext?.params ?? []).map((p) => [p.id, p.default]))
+        params: {
+          extensionId,
+          ...Object.fromEntries((ext?.params ?? []).map((p) => [p.id, p.default]))
+        }
       }
     }
   }

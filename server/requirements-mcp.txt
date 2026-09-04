@@ -1,0 +1,11 @@
+# Optional dependencies for server/mcp_server.py — the MCP (Model Context
+# Protocol) stdio server that exposes Meshforge to external agents such as
+# Claude Desktop / Codex CLI.
+#
+# Kept out of requirements.txt on purpose so the lean backend venv stays
+# dependency-light; only install when you actually use the MCP server:
+#
+#     server/.venv/Scripts/python.exe -m pip install -r server/requirements-mcp.txt
+#
+mcp>=1.2
+httpx>=0.27

@@ -1,0 +1,44 @@
+appId: dev.weewrr.meshforge
+productName: MeshForge
+
+directories:
+  # 打包产物输出到 dist/（已 gitignore）
+  output: dist
+  buildResources: build
+
+# 应用本体：electron-vite 构建产物（主进程依赖已被 bundle，无需 node_modules）
+files:
+  - out/**
+  - package.json
+  - "!out/**/*.map"
+
+# Python 后端源码随包携带（供 python-bridge 在用户机器上拉起）
+extraResources:
+  - from: server
+    to: server
+    filter:
+      - "**/*"
+      - "!__pycache__/**"
+      - "!**/__pycache__/**"
+      - "!.venv/**"
+      - "!workspace/**"
+      - "!models/**"
+  - from: scripts/setup-hunyuan-server.bat
+    to: scripts/setup-hunyuan-server.bat
+  - from: scripts/start-hunyuan-server.bat
+    to: scripts/start-hunyuan-server.bat
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # 无正式签名证书前跳过签名
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-${version}-setup.${ext}
+
+# 暂未提供 build/icon.ico 时自动使用 Electron 默认图标；放入后自动启用

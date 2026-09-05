@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "description": "Local, open-source image-to-3D mesh generation for consumer GPUs",
   "license": "MIT",
+  "author": "weewrr",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "pack": "electron-builder --dir",
+    "dist": "electron-vite build && electron-builder",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json"
   },
@@ -29,6 +32,7 @@
     "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^44.1.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "typescript": "^7.0.2",
     "vite": "^7.3.6"

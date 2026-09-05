@@ -217,13 +217,17 @@ npm run build      # 生产构建
 
 MeshForge 默认附带 CPU **mock 浮雕**生成器，UI 开箱即用。若要在本地 GPU（**≥ 6 GB 显存**）上运行真正的 **图片 → 3D 网格**：
 
-1. 将权重下载到本地目录，例如 `D:\github\models\Hunyuan3D-2mini\` —— 仓库 `tencent/Hunyuan3D-2mini`，子目录 `hunyuan3d-dit-v2-mini`、`hunyuan3d-vae-v2-mini`、`hunyuan3d-vae-v2-mini-withencoder`。
-2. 创建 **Python 3.11** 环境，安装 CUDA 版 PyTorch 与 `hy3dgen==2.0.2` 及其运行时依赖 —— 见 `server/requirements-hunyuan.txt`。
-3. 启动推理服务：
+1. 一键环境安装（需 [uv](https://docs.astral.sh/uv/)）—— 自动创建 Python 3.11 + CUDA venv、从国内镜像安装 `hy3dgen==2.0.2` 及运行时依赖、并把权重（仓库 `tencent/Hunyuan3D-2mini`，子目录 `hunyuan3d-dit-v2-mini` / `hunyuan3d-vae-v2-mini` / `hunyuan3d-vae-v2-mini-withencoder`）下载到 `server\models\`：
+   ```
+   scripts\setup-hunyuan-server.bat
+   ```
+2. 启动推理服务：
    ```
    scripts\start-hunyuan-server.bat        # 监听 http://127.0.0.1:8767
    ```
-4. 在界面中选择 **Hunyuan3D 2 mini (Real)** 生成器。适配器
+
+   启动脚本按以下顺序自动探测权重：`HY3DGEN_MODELS` 环境变量 → 旧位置 `D:\github\models` → `server\models`。想手动安装？完整命令见 `server/requirements-hunyuan.txt`。
+3. 在界面中选择 **Hunyuan3D 2 mini (Real)** 生成器。适配器
    （`server/generators/hunyuan.py`）会探测 `/health` 并把图片 POST 到
    `/generate`，保存返回的 GLB —— 只要服务运行在默认端口就无需额外配置
    （可用 `MESHFORGE_HUNYUAN_URL` 覆盖）。

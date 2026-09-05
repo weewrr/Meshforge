@@ -1,15 +1,18 @@
 # Runtime deps for the MeshForge Hunyuan3D-2-mini inference service
 # (server/hunyuan_service.py). Install into a dedicated Python 3.11 env —
-# NOT into the MeshForge server venv:
+# NOT into the MeshForge server venv. One-click: scripts/setup-hunyuan-server.bat
+# (creates the venv, installs CUDA torch, then these deps, then the weights).
 #
+# Manual equivalent:
 #   uv venv D:/github/hy3dgen-venv --python 3.11
 #   uv pip install --python D:/github/hy3dgen-venv/Scripts/python.exe ^
 #       torch torchvision --index-url https://download.pytorch.org/whl/cu126
 #   uv pip install --python D:/github/hy3dgen-venv/Scripts/python.exe ^
 #       -r requirements-hunyuan.txt
 #
-torch            # install with CUDA index first (see above)
-torchvision      # same
+# NOTE: torch/torchvision are intentionally NOT listed here — they must be
+# installed from the CUDA index first (PyPI wheels are CPU-only on Windows):
+#   torch torchvision  →  --index-url https://download.pytorch.org/whl/cu126
 hy3dgen==2.0.2
 transformers>=4.48.0
 diffusers

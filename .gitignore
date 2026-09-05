@@ -5,6 +5,7 @@ dist/
 
 server/.venv/
 server/workspace/
+server/models/
 server/__pycache__/
 server/**/__pycache__/
 *.pyc

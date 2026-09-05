@@ -54,6 +54,9 @@ async def main() -> int:
     parser.add_argument("generator_id", nargs="?", default="hunyuan3d-2-mini")
     parser.add_argument("--steps", type=int, default=10)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--guidance", type=float, default=None)
+    parser.add_argument("--octree", type=int, default=None, choices=(256, 320, 384))
+    parser.add_argument("--no-remove-base", action="store_true", help="keep the support disc")
     parser.add_argument("--timeout", type=float, default=300.0)
     args = parser.parse_args()
 
@@ -86,6 +89,12 @@ async def main() -> int:
         "steps": args.steps,
         "seed": args.seed,
     }
+    if args.guidance is not None:
+        gen_args["guidance"] = args.guidance
+    if args.octree is not None:
+        gen_args["octree"] = args.octree
+    if args.no_remove_base:
+        gen_args["remove_base"] = False
     print(f"== generate: {args.generator_id} steps={args.steps} seed={args.seed} ==")
     await send(proc.stdin, {
         "jsonrpc": "2.0", "id": 2, "method": "tools/call",

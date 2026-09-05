@@ -16,6 +16,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { IN_HANDLE, OUT_HANDLE, allExtensions, getExtensionById, isContainerType, nodePorts, nodeSpec, portCompatible, type WFEdge, type WFNode } from '../types'
 import { useWorkflowsStore } from '../stores/workflows'
+import { useAppStore } from '../stores/app'
 import { useWorkflowRunStore } from '../stores/workflowRun'
 import { useNavigationStore } from '../stores/navigation'
 import { useLogsStore } from '../stores/logs'
@@ -85,6 +86,9 @@ const PALETTE_NODES: { payload: string; labelKey: string; hintKey: string }[] = 
 function Canvas() {
   const { screenToFlowPosition } = useReactFlow()
   const t = useT()
+  const theme = useAppStore((s) => s.theme)
+  const canvasBg = theme === 'light' ? '#eef0f3' : '#0e1015'
+  const canvasDot = theme === 'light' ? '#c3cad6' : '#1e222b'
   const current = useWorkflowsStore((s) => s.current)
   const applyNodeChanges = useWorkflowsStore((s) => s.applyNodeChanges)
   const applyEdgeChanges = useWorkflowsStore((s) => s.applyEdgeChanges)
@@ -562,14 +566,14 @@ function Canvas() {
         fitView
         minZoom={0.2}
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#23262f" />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color={canvasDot} />
         <Controls showInteractive={false} />
         <MiniMap
           pannable
           zoomable
           nodeColor={(n) => nodeSpec(n.type ?? '').color}
-          maskColor="rgba(15,17,21,0.75)"
-          style={{ backgroundColor: '#12141a' }}
+          maskColor="rgba(11,12,15,0.75)"
+          style={{ backgroundColor: canvasBg }}
         />
       </ReactFlow>
 
@@ -970,7 +974,13 @@ export default function WorkflowsPage() {
             }}
           >
             {dragOverTab === w.id && <span className="wf-tab__drop" />}
-            {w.bookmarked && <span className="wf-tab__star" title={t('workflows.tab.favorited')}>★</span>}
+            {w.bookmarked && (
+              <span className="wf-tab__star" title={t('workflows.tab.favorited')}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+              </span>
+            )}
             <span className="wf-tab__name">{w.name}</span>
             {runningWorkflowId === w.id && (
               <span className="wf-tab__running" title={t('workflows.tab.running')} />

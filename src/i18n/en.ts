@@ -91,6 +91,13 @@ export const en = {
     accessibility: {
       title: 'Accessibility',
       subtitle: 'Make Meshforge easier to read and use.',
+      themeTitle: 'Theme',
+      themeDesc: 'Dark forge or daylight — applies instantly and is remembered.',
+      themeLabel: 'Color theme',
+      themeRowDesc: 'Switch between the dark and light palettes.',
+      themeAria: 'Color theme',
+      themeDark: 'Dark',
+      themeLight: 'Light',
       fontTitle: 'Display Font',
       fontDesc: 'Use a more legible typeface, helpful for dyslexia and low vision.',
       atkinsonLabel: 'Atkinson Hyperlegible',
@@ -342,6 +349,11 @@ export const en = {
       openEditor: 'Open workflow editor',
       noWorkflows: 'No workflows yet.',
       createWorkflowTab: 'Create one in the Workflows tab.'
+    },
+    chat: {
+      dropImage: 'Drop image here',
+      emptyHint: 'Ask me to generate, optimize, or run a workflow.',
+      noModels: 'No models found — is Ollama running?'
     },
     log: {
       imageDialogUnavailable: '[image-param] native file dialog unavailable (browser-only run)',

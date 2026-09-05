@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { fullUrl, getJob, getWorkflow, importImageByPath, importMeshByPath, listLibrary, processMesh, saveWorkflow } from '../api'
 import ErrorBoundary, { type ErrorBoundaryFallbackProps } from '../components/ErrorBoundary'
-import Viewer3D from '../components/Viewer3D'
+// three.js (~2MB) is deferred one level further: the page chrome, params and
+// chat paint immediately, the viewport loads in behind a Suspense fallback.
+const Viewer3D = lazy(() => import('../components/Viewer3D'))
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useLogsStore } from '../stores/logs'
 import { useNavigationStore } from '../stores/navigation'
@@ -430,7 +432,7 @@ function GenerationHUD({ nodes }: { nodes: WFNode[] }) {
           <>
             <div className="gp-hud__top">
               <div className="gp-hud__label">
-                <span className="gp-hud__dot" style={runState === 'paused' ? { background: '#fbbf24' } : undefined} />
+                <span className="gp-hud__dot" style={runState === 'paused' ? { background: '#facc15' } : undefined} />
                 <span>{runState === 'paused' ? t('generate.hud.waitingInput') : (activeLabel ?? t('generate.hud.generating'))}</span>
               </div>
               <span className="gp-hud__time">{formatElapsed(elapsed)}</span>
@@ -880,7 +882,7 @@ export default function GeneratePage() {
                 />
                 {selectedId && (
                   <button className="gp-edit" title={t('generate.actions.editWorkflow')} aria-label={t('generate.actions.editWorkflow')} onClick={openEditor}>
-                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b93a7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted2)' }}>
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                     </svg>
@@ -917,6 +919,11 @@ export default function GeneratePage() {
               )}
               {!workflow && (
                 <div className="gp-params__empty">
+                  <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <path d="M17.5 14.5v6M14.5 17.5h6" />
+                  </svg>
                   <p>{t('generate.empty.noWorkflows')}<br />{t('generate.empty.createWorkflowTab')}</p>
                 </div>
               )}
@@ -1305,7 +1312,9 @@ export default function GeneratePage() {
           >
             {/* Always mounted: with no model the empty state (persistent ground
                 grid + hint overlay) lives inside Viewer3D, modly parity. */}
-            <Viewer3D url={meshUrl} light={light} />
+            <Suspense fallback={<div className="gp-viewer__deferred" aria-hidden="true" />}>
+              <Viewer3D url={meshUrl} light={light} />
+            </Suspense>
           </ErrorBoundary>
           <GenerationHUD nodes={nodes} />
         </div>

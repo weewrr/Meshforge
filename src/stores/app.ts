@@ -8,12 +8,14 @@ import { create } from 'zustand'
 export type ThinkingMode = 'auto' | 'on' | 'off'
 export type UiScale = 'small' | 'medium' | 'large' | 'very-large'
 export type UiLocale = 'en' | 'zh'
+export type UiTheme = 'dark' | 'light'
 
 export interface AppSettings {
   showRamIndicator: boolean
   useAtkinsonFont: boolean
   uiScale: UiScale
   locale: UiLocale
+  theme: UiTheme
   hfToken: string
   ollamaUrl: string
   defaultModel: string
@@ -32,6 +34,7 @@ const DEFAULTS: AppSettings = {
   useAtkinsonFont: false,
   uiScale: 'medium',
   locale: 'en',
+  theme: 'dark',
   hfToken: '',
   ollamaUrl: 'http://localhost:11434',
   defaultModel: 'qwen2.5:3b',
@@ -84,10 +87,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   applyUi: () => {
-    const { useAtkinsonFont, uiScale, locale } = get()
+    const { useAtkinsonFont, uiScale, locale, theme } = get()
     document.documentElement.classList.toggle('font-atkinson', useAtkinsonFont)
     document.documentElement.style.zoom = String(UI_SCALE_ZOOM[uiScale])
     document.documentElement.lang = locale
+    document.documentElement.dataset.theme = theme
   }
 }))
 

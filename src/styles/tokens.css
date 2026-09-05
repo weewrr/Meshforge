@@ -1,0 +1,309 @@
+/* self-hosted design-system fonts (subsetted woff2, browser loads only needed ranges) */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+/* ─── Forge design language ─────────────────────────────────────────────────
+   Deep neutral-black elevation ramp + molten-orange brand accent (the "forge"),
+   cool data-type hues (sky / rose / violet / green) for ports & node kinds,
+   violet as the AI/chat secondary. All legacy token names are preserved so the
+   full stylesheet keeps working; one-off leftovers are re-pointed at the ramp. */
+
+:root {
+  /* backgrounds (deepest → surface) */
+  --bg-app: #0b0c0f;
+  --bg-panel: #0f1116;
+  --bg-input: #13161d;
+  --bg-elevated: #14171e;
+  --bg-surface: #161a21;
+  --bg-hover: #1d222b;
+  --bg-active: #222734;
+  --bg-selected: #262c3a;
+
+  /* borders */
+  --border: #1c2027;
+  --border-soft: #232833;
+  --border-strong: #363d4c;
+  --border-hover: #465064;
+  --border-faint: #525d73;
+
+  /* text */
+  --text: #e9ebf1;
+  --text-bright: #dee2ea;
+  --text-secondary: #aab3c5;
+  --text-muted: #8d96ab;
+  --text-faint: #6d7689;
+  --text-placeholder: #586172;
+
+  /* brand / accent — forge orange */
+  --accent: #f97316;
+  --accent-hover: #fb8c3c;
+  --accent-soft: #fdba74;
+  --accent-active: #e0670f;
+  --on-accent: #1c1006;
+
+  /* status */
+  --success: #4ade80;
+  --success-deep: #34b46c;
+  --warning: #facc15;
+  --warning-deep: #ca8a04;
+  --danger: #f87171;
+  --danger-deep: #e5484d;
+  --danger-solid: #d92d20;
+
+  /* secondary hues */
+  --violet: #c084fc;
+  --violet-soft: #a78bfa;
+  --sky: #38bdf8;
+  --rose: #fb7185;
+  --white: #ffffff;
+
+  /* component-specific surfaces / hues (re-pointed at the new ramp) */
+  --bg-canvas: #0e1015;
+  --bg-panel-deep: #0d0f14;
+  --bg-inset: #0d0f13;
+  --bg-overlay: #12151b;
+  --bg-app-deep: #090a0d;
+  --bg-black: #070809;
+  --bg-panel-soft: #171b23;
+  --border-dim: #20242e;
+  --border-faint2: #232838;
+  --border-dark: #1e222c;
+  --text-quiet: #3d4354;
+  --text-soft: #9ba4b6;
+  --text-tint: #c5cbd7;
+  --text-light: #cbd0dc;
+  --text-glow: #d6dae4;
+  --text-bright2: #d4d9e4;
+  --text-muted2: #8b94a7;
+  --text-dim: #2e3340;
+  --violet-solid: #8d74ff;
+  --violet-deep: #7c5cff;
+  --success-bright: #34d399;
+  --success-soft: #72cf9b;
+  --success-border: #2f6b4c;
+  --warning-bright: #fde047;
+  --warning-solid: #eab308;
+  --warning-soft: #e8c56a;
+  --warning-surface: #38300f;
+  --warning-border: #8a7a1f;
+  --warning-text: #f5e9ae;
+  --danger-bright: #ff8585;
+  --danger-strong: #dc2626;
+  --danger-solid2: #ef4444;
+  --danger-dark: #c81e1e;
+  --danger-emph: #c04541;
+  --danger-border: #7a3030;
+  /* single-use leftovers */
+
+  /* status soft backgrounds */
+  --accent-soft-bg: rgba(249, 115, 22, 0.14);
+  --success-soft-bg: rgba(74, 222, 128, 0.14);
+  --danger-soft-bg: rgba(239, 68, 68, 0.14);
+  --warning-soft-bg: rgba(250, 204, 21, 0.13);
+  --accent-glow: rgba(249, 115, 22, 0.16);
+  --accent-glow-strong: rgba(249, 115, 22, 0.35);
+
+  /* translucent surfaces (theme-dependent — dark defaults, light overrides below) */
+  --bg-scrim: rgba(8, 9, 12, 0.7);
+  --bg-scrim-soft: rgba(10, 11, 15, 0.45);
+  --bg-glass: rgba(26, 29, 37, 0.6);
+  --bg-glass-soft: rgba(15, 17, 21, 0.4);
+  --bg-glass-strong: rgba(24, 27, 35, 0.95);
+  --border-glass: rgba(58, 63, 77, 0.5);
+
+  /* elevation */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+
+  /* layout */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --font-sans: 'Inter', 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+  --ease: var(--ease);
+}
+
+/* ─── Design tokens ───────────────────────────────────────────────────────── */
+
+/* ─── Global scrollbars ───────────────────────────────────────────────────── */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-hover) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ─── Global focus rings (visual consistency) ─────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Reduced motion ──────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+/* ─── Light theme (Forge daylight) ──────────────────────────────────────────
+   Full token override; activated via `data-theme="light"` on <html> from the
+   app store (Settings → Appearance). Same structure as the dark ramp. */
+
+:root[data-theme='light'] {
+  /* backgrounds (deepest → surface) */
+  --bg-app: #f6f7f9;
+  --bg-panel: #ffffff;
+  --bg-input: #f0f2f5;
+  --bg-elevated: #ffffff;
+  --bg-surface: #f0f2f5;
+  --bg-hover: #e7eaef;
+  --bg-active: #dde2e9;
+  --bg-selected: #d6ddec;
+
+  /* borders */
+  --border: #e1e5ec;
+  --border-soft: #e8ebf1;
+  --border-strong: #c7cfdb;
+  --border-hover: #96a2b8;
+  --border-faint: #8a97ad;
+
+  /* text */
+  --text: #1b1e26;
+  --text-bright: #101216;
+  --text-secondary: #454c5c;
+  --text-muted: #5d6577;
+  --text-faint: #798192;
+  --text-placeholder: #9aa2b2;
+
+  /* brand / accent — forge orange, deepened for white-on-orange contrast */
+  --accent: #e0670f;
+  --accent-hover: #c95a08;
+  --accent-soft: #c2410c;
+  --accent-active: #b54e05;
+  --on-accent: #ffffff;
+
+  /* status */
+  --success: #15803d;
+  --success-deep: #166534;
+  --warning: #b45309;
+  --warning-deep: #92400e;
+  --danger: #dc2626;
+  --danger-deep: #b91c1c;
+  --danger-solid: #dc2626;
+
+  /* secondary hues */
+  --violet: #9333ea;
+  --violet-soft: #7c3aed;
+  --sky: #0369a1;
+  --rose: #e11d48;
+  --white: #ffffff;
+
+  /* component-specific surfaces */
+  --bg-canvas: #eef0f3;
+  --bg-panel-deep: #edeff2;
+  --bg-inset: #eceef1;
+  --bg-overlay: #ffffff;
+  --bg-app-deep: #e8eaee;
+  --bg-black: #dfe2e7;
+  --bg-panel-soft: #f4f5f7;
+  --border-dim: #dfe3ea;
+  --border-faint2: #d8dde6;
+  --border-dark: #d4d9e2;
+  --text-quiet: #b3bac6;
+  --text-soft: #6b7383;
+  --text-tint: #2c313c;
+  --text-light: #333945;
+  --text-glow: #262b34;
+  --text-bright2: #1f242d;
+  --text-muted2: #5c6474;
+  --text-dim: #8d95a5;
+  --violet-solid: #7c3aed;
+  --violet-deep: #6d28d9;
+  --success-bright: #16a34a;
+  --success-soft: #15803d;
+  --success-border: #86cfa4;
+  --warning-bright: #d97706;
+  --warning-solid: #d97706;
+  --warning-soft: #92400e;
+  --warning-surface: #fef3c7;
+  --warning-border: #d3b45a;
+  --warning-text: #713f12;
+  --danger-bright: #dc2626;
+  --danger-strong: #b91c1c;
+  --danger-solid2: #dc2626;
+  --danger-dark: #991b1b;
+  --danger-emph: #b91c1c;
+  --danger-border: #e4a1a1;
+
+  /* status soft backgrounds */
+  --accent-soft-bg: rgba(224, 103, 15, 0.12);
+  --success-soft-bg: rgba(21, 128, 61, 0.12);
+  --danger-soft-bg: rgba(220, 38, 38, 0.1);
+  --warning-soft-bg: rgba(180, 83, 9, 0.12);
+  --accent-glow: rgba(224, 103, 15, 0.16);
+  --accent-glow-strong: rgba(224, 103, 15, 0.32);
+
+  /* translucent surfaces */
+  --bg-scrim: rgba(15, 18, 24, 0.45);
+  --bg-scrim-soft: rgba(15, 18, 24, 0.25);
+  --bg-glass: rgba(255, 255, 255, 0.75);
+  --bg-glass-soft: rgba(255, 255, 255, 0.55);
+  --bg-glass-strong: rgba(255, 255, 255, 0.96);
+  --border-glass: rgba(20, 26, 38, 0.14);
+
+  /* elevation — softer, tinted shadows */
+  --shadow-1: 0 1px 2px rgba(24, 30, 42, 0.1);
+  --shadow-2: 0 4px 16px rgba(24, 30, 42, 0.12);
+  --shadow-pop: 0 8px 28px rgba(24, 30, 42, 0.16), 0 0 0 1px rgba(24, 30, 42, 0.05);
+  --shadow-modal: 0 16px 48px rgba(24, 30, 42, 0.2), 0 0 0 1px rgba(24, 30, 42, 0.06);
+
+  color-scheme: light;
+}
+
+:root {
+  color-scheme: dark;
+}

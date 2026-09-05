@@ -92,6 +92,13 @@ export const zh: typeof en = {
     accessibility: {
       title: '无障碍',
       subtitle: '让 Meshforge 更易阅读和使用。',
+      themeTitle: '主题',
+      themeDesc: '暗色锻炉或明亮日光——立即生效并自动记住。',
+      themeLabel: '配色主题',
+      themeRowDesc: '在暗色与浅色调色板之间切换。',
+      themeAria: '配色主题',
+      themeDark: '深色',
+      themeLight: '浅色',
       fontTitle: '显示字体',
       fontDesc: '使用更清晰的字体，有利于阅读障碍和低视力用户。',
       atkinsonLabel: 'Atkinson Hyperlegible',
@@ -343,6 +350,11 @@ export const zh: typeof en = {
       openEditor: '打开工作流编辑器',
       noWorkflows: '还没有工作流。',
       createWorkflowTab: '在工作流选项卡中创建一个。'
+    },
+    chat: {
+      dropImage: '拖入图片到此处',
+      emptyHint: '让我帮你生成、优化模型，或运行工作流。',
+      noModels: '未找到模型 — Ollama 是否在运行？'
     },
     log: {
       imageDialogUnavailable: '[image-param] 原生文件对话框不可用（浏览器环境运行）',

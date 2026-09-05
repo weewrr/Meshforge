@@ -55,7 +55,7 @@ export function Sidebar() {
   const t = useT()
 
   return (
-    <nav className="sidebar">
+    <nav className="sidebar" aria-label={t('titlebar.app')}>
       {ITEMS.map((item) => {
         const label = t(item.key)
         return (
@@ -71,6 +71,22 @@ export function Sidebar() {
         )
       })}
     </nav>
+  )
+}
+
+/** Brand mark: isometric forge cube with molten gradient + dark edge lines. */
+function BrandMark({ size = 17 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="mf-brand-grad" x1="4" y1="3" x2="20" y2="21" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#fb923c" />
+          <stop offset="1" stopColor="#ea580c" />
+        </linearGradient>
+      </defs>
+      <path d="M12 2.6l8.4 4.85v9.1L12 21.4l-8.4-4.85v-9.1L12 2.6z" fill="url(#mf-brand-grad)" />
+      <path d="M12 2.6v9.35m0 0l8.4-4.5M12 11.95L3.6 7.45" stroke="#0b0c0f" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
   )
 }
 
@@ -137,7 +153,10 @@ export function TitleBar() {
 
   return (
     <div className="titlebar">
-      <span className="titlebar__app">{t('titlebar.app')}</span>
+      <span className="titlebar__brand">
+        <BrandMark />
+        <span className="titlebar__app">{t('titlebar.app')}</span>
+      </span>
       {showRamIndicator && mem && (
         <div
           className="titlebar__ram"
@@ -162,17 +181,23 @@ export function TitleBar() {
         title={t('titlebar.minimize')} aria-label={t('titlebar.minimize')}
         onClick={() => void window.meshforge?.winMin()}
       >
-        —
+        <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10">
+          <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" strokeWidth="1" />
+        </svg>
       </button>
       <button
         className="titlebar__btn"
         title={t('titlebar.maximize')} aria-label={t('titlebar.maximize')}
         onClick={() => void window.meshforge?.winMax()}
       >
-        ▢
+        <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <rect x="1.5" y="1.5" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1" />
+        </svg>
       </button>
       <button className="titlebar__btn titlebar__btn--close" title={t('titlebar.close')} aria-label={t('titlebar.close')} onClick={() => void window.meshforge?.winClose()}>
-        ×
+        <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1" />
+        </svg>
       </button>
     </div>
   )

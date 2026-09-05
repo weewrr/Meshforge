@@ -4,7 +4,7 @@ import { nodePorts, nodeSpec } from '../../types'
 
 const PORT_COLOR: Record<string, string> = {
   image: '#38bdf8',
-  text: '#fbbf24',
+  text: '#fb7185',
   mesh: '#a78bfa',
   any: '#71717a'
 }

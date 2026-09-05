@@ -5,6 +5,7 @@ import { useSceneStore } from '../../stores/scene'
 import { useWorkflowsStore } from '../../stores/workflows'
 import { useWorkflowRunStore } from '../../stores/workflowRun'
 import { allExtensions } from '../../types'
+import { useT } from '../../i18n'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -192,6 +193,7 @@ function WorkflowProgressCard({ name }: { name: string }) {
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function ChatPanel() {
+  const t = useT()
   const defaultModel = useAppStore((s) => s.defaultModel)
   const defaultThinking = useAppStore((s) => s.defaultThinking)
   const ollamaUrl = useAppStore((s) => s.ollamaUrl)
@@ -442,7 +444,7 @@ export default function ChatPanel() {
       {/* Drag overlay */}
       {isDragging && (
         <div className="gp-chat__dropoverlay">
-          <p>Drop image here</p>
+          <p>{t('generate.chat.dropImage')}</p>
         </div>
       )}
 
@@ -454,7 +456,7 @@ export default function ChatPanel() {
               <rect x="3" y="11" width="18" height="10" rx="2" />
               <circle cx="12" cy="5" r="2" /><path d="M12 7v4" />
             </svg>
-            <p>Ask me to generate, optimize,<br />or run a workflow.</p>
+            <p>{t('generate.chat.emptyHint')}</p>
           </div>
         )}
 
@@ -582,7 +584,7 @@ export default function ChatPanel() {
                 {showModelPicker && (
                   <div className="gp-chat__modellist">
                     {ollamaModels.length === 0 ? (
-                      <p className="gp-chat__modelempty">No models found — is Ollama running?</p>
+                      <p className="gp-chat__modelempty">{t('generate.chat.noModels')}</p>
                     ) : (
                       ollamaModels.map((m) => (
                         <button key={m} onClick={() => { setModel(m); setShowModelPicker(false) }}>

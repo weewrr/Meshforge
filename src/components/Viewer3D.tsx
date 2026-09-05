@@ -266,12 +266,12 @@ export default function Viewer3D({
         gl={{ preserveDrawingBuffer: true }}
         onPointerMissed={() => setMeshSelected(false)}
       >
-        <color attach="background" args={['#161920']} />
+        <color attach="background" args={['#0e1015']} />
         <ambientLight intensity={l.ambient} />
         <directionalLight position={[3, 4, 2]} intensity={l.main} />
         <directionalLight position={[-3, -1, -2]} intensity={l.fill} />
         {/* Persistent ground grid — CAD/DCC style, always visible (modly parity). */}
-        <gridHelper args={[10, 20, '#3f3f46', '#27272a']} />
+        <gridHelper args={[10, 20, '#3a3a42', '#232329']} />
         {url ? (
           <Suspense fallback={null}>
             <Model

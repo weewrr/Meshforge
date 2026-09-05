@@ -1,0 +1,196 @@
+/* ─── Error boundary fallbacks ───────────────────────────────────────────── */
+
+/* Generic default fallback (ErrorBoundary without a custom fallback prop). */
+.eb {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+  background: var(--bg-canvas);
+}
+
+.eb__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.eb__msg {
+  margin: 0;
+  max-width: 480px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+/* Whole-page fallback rendered inside .app__content (flex column). */
+.eb-app {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.eb-app__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.eb-app__msg {
+  margin: 0;
+  max-width: 480px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.eb-app__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.eb-app__icon {
+  color: var(--danger);
+}
+
+/* Viewer-local fallback: inherits .gp-viewer__empty layout (absolute fill). */
+.eb-viewer {
+  color: var(--text-muted);
+}
+
+.eb-viewer__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.eb-viewer__msg {
+  max-width: 440px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.eb-viewer__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.eb-btn {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.eb-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+}
+
+.eb-btn--primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.eb-btn--primary:hover {
+  background: var(--accent-hover);
+}
+
+/* ─── Micro-interactions (Forge polish pass) ──────────────────────────────
+   Hover lift on cards, press feedback on icon buttons, and the two lazy
+   Suspense fallbacks (route switch + deferred 3D viewport). */
+
+.wf-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+
+.wf-card__action:active,
+.wf-card:hover .wf-card__action:active,
+.wf-open__icon-btn:active,
+.wf-folder__btn:active,
+.gp-edit:active {
+  transform: scale(0.92);
+}
+
+.wf-card__action,
+.wf-open__icon-btn,
+.wf-folder__btn,
+.gp-edit {
+  transition: background var(--ease), color var(--ease),
+    border-color var(--ease), transform 0.08s ease;
+}
+
+/* Route-level Suspense fallback: a single breathing dot on app background */
+.app__loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app__loading::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: forge-breathe 1.2s ease-in-out infinite;
+}
+
+/* Deferred Viewer3D fallback: keeps the viewport area stable while three.js
+   chunk loads in behind it */
+.gp-viewer__deferred {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gp-viewer__deferred::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.7;
+  animation: forge-breathe 1.2s ease-in-out infinite;
+}
+
+@keyframes forge-breathe {
+  0%,
+  100% {
+    transform: scale(0.75);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}

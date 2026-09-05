@@ -1,9 +1,48 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { getWorkflow, saveWorkflow } from '../../api'
 import { useWorkflowsStore } from '../../stores/workflows'
+import { useAppStore } from '../../stores/app'
 import { useFocusTrap } from '../../hooks/useFocusTrap'
 import type { Workflow } from '../../types'
 import { useT } from '../../i18n'
+
+// ─── Action icons ──────────────────────────────────────────────────────────
+// Monochrome SVG icons (currentColor → themeable, consistent 1.75 stroke).
+
+const ACTION_ICONS: Record<string, ReactElement> = {
+  star: (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  ),
+  duplicate: (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  ),
+  rename: (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  ),
+  close: (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  ),
+  plus: (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
+      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  ),
+  folder: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" aria-hidden="true">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+  )
+}
+
 
 // ─── Mini graph preview ────────────────────────────────────────────────────
 // Schematic SVG thumbnail built from stored node positions, no React Flow.
@@ -14,7 +53,7 @@ const PAD = 12
 
 const MINI_TINTS: Record<string, { fill: string; stroke: string }> = {
   imageNode: { fill: 'rgba(56,189,248,0.20)', stroke: '#38bdf8' },
-  textNode: { fill: 'rgba(251,191,36,0.20)', stroke: '#fbbf24' },
+  textNode: { fill: 'rgba(251,113,133,0.20)', stroke: '#fb7185' },
   meshNode: { fill: 'rgba(167,139,250,0.22)', stroke: '#a78bfa' },
   generatorNode: { fill: 'rgba(52,211,153,0.20)', stroke: '#34d399' },
   previewNode: { fill: 'rgba(56,189,248,0.20)', stroke: '#38bdf8' },
@@ -133,6 +172,7 @@ function writeJson(key: string, value: unknown): void {
 
 export default function OpenPopup({ onClose }: { onClose: () => void }) {
   const t = useT()
+  const locale = useAppStore((s) => s.locale)
   const trapRef = useFocusTrap<HTMLDivElement>(true, onClose)
   const store = useWorkflowsStore
   const select = store((s) => s.select)
@@ -253,7 +293,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
                 void toggleBookmark(wf.id).then(refresh)
               }}
             >
-              ★
+              {ACTION_ICONS.star}
             </button>
             <button
               className="wf-card__action"
@@ -264,7 +304,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
                 void duplicate(wf.id).then(refresh)
               }}
             >
-              ⧉
+              {ACTION_ICONS.duplicate}
             </button>
             <button
               className="wf-card__action"
@@ -275,7 +315,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
                 setRenameTarget({ id: wf.id, value: wf.name })
               }}
             >
-              ✎
+              {ACTION_ICONS.rename}
             </button>
             <button
               className="wf-card__action wf-card__action--danger"
@@ -286,13 +326,13 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
                 setDeleteTarget(wf.id)
               }}
             >
-              ✕
+              {ACTION_ICONS.close}
             </button>
           </div>
         </div>
         <div className="wf-card__meta">
           <p className="wf-card__name">{wf.name || t('workflows.popup.untitled')}</p>
-          <p className="wf-card__time">{new Date(wf.updatedAt).toLocaleString('en-US', { hour12: false })}</p>
+          <p className="wf-card__time">{new Date(wf.updatedAt).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US', { hour12: false })}</p>
         </div>
       </div>
     )
@@ -337,7 +377,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
               background: folderColors[folder] ? `${folderColors[folder]}22` : 'transparent'
             }}
           >
-            ▣
+            {ACTION_ICONS.folder}
           </span>
           <span className="wf-folder__name">{folder}</span>
           <span className="wf-folder__count">{inFolder.length}</span>
@@ -351,7 +391,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
               toggleFolderBookmark(folder)
             }}
           >
-            ★
+            {ACTION_ICONS.star}
           </button>
           <button
             className="wf-folder__btn"
@@ -376,7 +416,7 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
               deleteFolder(folder)
             }}
           >
-            ✕
+            {ACTION_ICONS.close}
           </button>
         </div>
         {colorPickerFolder === folder && (
@@ -434,10 +474,10 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
               aria-label={t('workflows.popup.newFolder')}
               onClick={() => setNewFolderName('')}
             >
-              ＋
+              {ACTION_ICONS.plus}
             </button>
             <button className="wf-open__icon-btn" title={t('workflows.popup.close')} aria-label={t('workflows.popup.close')} onClick={onClose}>
-              ✕
+              {ACTION_ICONS.close}
             </button>
           </div>
         </div>
@@ -483,7 +523,13 @@ export default function OpenPopup({ onClose }: { onClose: () => void }) {
           }}
         >
           {workflows.length === 0 && folders.length === 0 && (
-            <p className="wf-open__empty">{t('workflows.popup.noSaved')}</p>
+            <div className="wf-open__empty">
+              <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                <path d="M12 10v6M9 13h6" />
+              </svg>
+              <p>{t('workflows.popup.noSaved')}</p>
+            </div>
           )}
 
           {query !== '' ? (

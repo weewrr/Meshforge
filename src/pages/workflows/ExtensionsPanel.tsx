@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { listExtensions } from '../../api'
 import { NODE_SPECS, nodeSpec } from '../../types'
 import type { WorkflowExtension } from '../../types'
@@ -13,16 +13,70 @@ interface PanelItem {
 }
 
 const BUILTIN_ITEMS: PanelItem[] = [
-  { dragPayload: 'builtin:imageNode', labelKey: 'workflows.palette.imageLabel', color: '#38bdf8', glyph: '🖼' },
-  { dragPayload: 'builtin:textNode', labelKey: 'workflows.palette.textLabel', color: '#fbbf24', glyph: 'T' },
-  { dragPayload: 'builtin:meshNode', labelKey: 'workflows.palette.meshLabel', color: '#a78bfa', glyph: '◈' },
-  { dragPayload: 'builtin:generatorNode', labelKey: 'workflows.palette.generateLabel', color: '#34d399', glyph: '⚙' },
-  { dragPayload: 'builtin:outputNode', labelKey: 'workflows.palette.outputLabel', color: '#a78bfa', glyph: '⬒' },
-  { dragPayload: 'builtin:previewNode', labelKey: 'workflows.palette.previewLabel', color: '#38bdf8', glyph: '▦' },
-  { dragPayload: 'builtin:waitNode', labelKey: 'workflows.palette.waitLabel', color: '#71717a', glyph: '⏸' },
-  { dragPayload: 'builtin:whileNode', labelKey: 'workflows.palette.whileLabel', color: '#f59e0b', glyph: '↻' },
-  { dragPayload: 'builtin:forEachNode', labelKey: 'workflows.palette.forEachLabel', color: '#38bdf8', glyph: '⧉' }
+  { dragPayload: 'builtin:imageNode', labelKey: 'workflows.palette.imageLabel', color: '#38bdf8', glyph: 'image' },
+  { dragPayload: 'builtin:textNode', labelKey: 'workflows.palette.textLabel', color: '#fb7185', glyph: 'text' },
+  { dragPayload: 'builtin:meshNode', labelKey: 'workflows.palette.meshLabel', color: '#a78bfa', glyph: 'mesh' },
+  { dragPayload: 'builtin:generatorNode', labelKey: 'workflows.palette.generateLabel', color: '#34d399', glyph: 'generate' },
+  { dragPayload: 'builtin:outputNode', labelKey: 'workflows.palette.outputLabel', color: '#a78bfa', glyph: 'output' },
+  { dragPayload: 'builtin:previewNode', labelKey: 'workflows.palette.previewLabel', color: '#38bdf8', glyph: 'preview' },
+  { dragPayload: 'builtin:waitNode', labelKey: 'workflows.palette.waitLabel', color: '#71717a', glyph: 'wait' },
+  { dragPayload: 'builtin:whileNode', labelKey: 'workflows.palette.whileLabel', color: '#facc15', glyph: 'loop' },
+  { dragPayload: 'builtin:forEachNode', labelKey: 'workflows.palette.forEachLabel', color: '#38bdf8', glyph: 'forEach' }
 ]
+
+/** Monochrome SVG tile icons (currentColor → themeable, consistent stroke). */
+const TILE_ICONS: Record<string, ReactElement> = {
+  image: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </svg>
+  ),
+  text: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <path d="M4 7V5h16v2M12 5v14M9 19h6" />
+    </svg>
+  ),
+  mesh: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+    </svg>
+  ),
+  generate: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
+      <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" />
+    </svg>
+  ),
+  output: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  ),
+  preview: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+    </svg>
+  ),
+  wait: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+    </svg>
+  ),
+  loop: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </svg>
+  ),
+  forEach: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  )
+}
 
 const PANEL_MIN = 200
 const PANEL_MAX = 480
@@ -41,7 +95,7 @@ function PanelTile({ item }: { item: PanelItem }) {
       title={t('workflows.panel.dragToAdd', { label: labelText })}
     >
       <span className="wf-tile__glyph" style={{ color: item.color }}>
-        {item.glyph}
+        {TILE_ICONS[item.glyph] ?? item.glyph}
       </span>
       <span className="wf-tile__label">{labelText}</span>
     </div>
@@ -92,7 +146,7 @@ export default function ExtensionsPanel() {
           dragPayload: `extension:${e.id}`,
           label: e.display_name,
           color: nodeSpec('extensionNode').color,
-          glyph: '⚙'
+          glyph: 'generate'
         })),
     [extensions, query]
   )
@@ -104,7 +158,7 @@ export default function ExtensionsPanel() {
           dragPayload: `extension:${e.id}`,
           label: e.display_name,
           color: nodeSpec('extensionNode').color,
-          glyph: '◈'
+          glyph: 'mesh'
         })),
     [extensions, query]
   )
@@ -185,7 +239,7 @@ function portColor(t: string): string {
     case 'image':
       return '#38bdf8'
     case 'text':
-      return '#fbbf24'
+      return '#fb7185'
     case 'mesh':
       return '#a78bfa'
     default:

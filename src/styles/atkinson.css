@@ -1,0 +1,6 @@
+/* ─── Atkinson font (Accessibility) ─────────────────────────────────────── */
+
+html.font-atkinson body {
+  font-family: 'Atkinson Hyperlegible', 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+}
+

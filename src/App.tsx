@@ -1,13 +1,17 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import ErrorBoundary, { type ErrorBoundaryFallbackProps } from './components/ErrorBoundary'
 import { Sidebar, TitleBar } from './components/Chrome'
-import GeneratePage from './pages/GeneratePage'
-import ModelsPage from './pages/ModelsPage'
-import SettingsPage from './pages/SettingsPage'
-import WorkflowsPage from './pages/WorkflowsPage'
 import { useT } from './i18n'
 import { useLogsStore } from './stores/logs'
 import { useNavigationStore } from './stores/navigation'
+
+// Route-level code splitting: three.js (Viewer3D inside GeneratePage) and
+// React Flow (WorkflowsPage) are the heavy dependencies — lazy loading keeps
+// the initial parse small and splits them into their own chunks.
+const GeneratePage = lazy(() => import('./pages/GeneratePage'))
+const ModelsPage = lazy(() => import('./pages/ModelsPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage'))
 
 function AppCrash({ error, reset }: ErrorBoundaryFallbackProps) {
   const t = useT()
@@ -87,10 +91,12 @@ export default function App() {
         <Sidebar />
         <div className="app__content">
           <ErrorBoundary label="App" fallback={(props) => <AppCrash {...props} />}>
-            {page === 'workflows' && <WorkflowsPage />}
-            {page === 'generate' && <GeneratePage />}
-            {page === 'models' && <ModelsPage />}
-            {page === 'settings' && <SettingsPage />}
+            <Suspense fallback={<div className="app__loading" aria-hidden="true" />}>
+              {page === 'workflows' && <WorkflowsPage />}
+              {page === 'generate' && <GeneratePage />}
+              {page === 'models' && <ModelsPage />}
+              {page === 'settings' && <SettingsPage />}
+            </Suspense>
           </ErrorBoundary>
         </div>
       </div>

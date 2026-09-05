@@ -264,12 +264,26 @@ function IntegrationsSection() {
 function AccessibilitySection() {
   const useAtkinsonFont = useAppStore((s) => s.useAtkinsonFont)
   const uiScale = useAppStore((s) => s.uiScale)
+  const theme = useAppStore((s) => s.theme)
   const patch = useAppStore((s) => s.patch)
   const t = useT()
 
   return (
     <Section title={t('settings.accessibility.title')} subtitle={t('settings.accessibility.subtitle')}>
       <div className="st-grid">
+        <Card title={t('settings.accessibility.themeTitle')} description={t('settings.accessibility.themeDesc')}>
+          <Row label={t('settings.accessibility.themeLabel')} description={t('settings.accessibility.themeRowDesc')}>
+            <SegmentedControl
+              ariaLabel={t('settings.accessibility.themeAria')}
+              value={theme}
+              onChange={(v) => patch({ theme: v })}
+              options={[
+                { value: 'dark', label: t('settings.accessibility.themeDark') },
+                { value: 'light', label: t('settings.accessibility.themeLight') }
+              ]}
+            />
+          </Row>
+        </Card>
         <Card title={t('settings.accessibility.fontTitle')} description={t('settings.accessibility.fontDesc')}>
           <Row
             label={t('settings.accessibility.atkinsonLabel')}

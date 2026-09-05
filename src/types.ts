@@ -87,7 +87,7 @@ export const NODE_SPECS: Record<
   previewNode: { label: 'Preview', color: '#38bdf8', inputs: ['mesh'], output: 'mesh' },
   outputNode: { label: 'Add to Scene', color: '#a78bfa', inputs: ['mesh'], output: 'none' },
   waitNode: { label: 'Wait', color: '#71717a', inputs: ['any'], output: 'any' },
-  whileNode: { label: 'While', color: '#f59e0b', inputs: ['any'], output: 'any' },
+  whileNode: { label: 'While', color: '#facc15', inputs: ['any'], output: 'any' },
   forEachNode: { label: 'For Each', color: '#38bdf8', inputs: ['any'], output: 'any' },
   extensionNode: { label: 'Extension', color: '#34d399', inputs: ['any'], output: 'any' }
 }

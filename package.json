@@ -10,6 +10,10 @@
     "build": "electron-vite build",
     "pack": "electron-builder --dir",
     "dist": "electron-vite build && electron-builder",
+    "test": "npm run test:stdio && npm run test:pipeline",
+    "test:stdio": "server\\.venv\\Scripts\\python.exe scripts/test_mcp_stdio.py",
+    "test:pipeline": "server\\.venv\\Scripts\\python.exe scripts/test_model_pipeline.py",
+    "test:generate": "server\\.venv\\Scripts\\python.exe scripts/test_mcp_generate.py",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json"
   },

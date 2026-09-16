@@ -198,9 +198,9 @@
 
 .wf-run-btn {
   padding: 6px 16px;
-  border: 1px solid rgba(249, 115, 22, 0.35);
+  border: 1px solid rgba(34, 211, 238, 0.35);
   border-radius: var(--radius-md);
-  background: rgba(249, 115, 22, 0.12);
+  background: rgba(34, 211, 238, 0.12);
   color: var(--accent-soft);
   font-size: 12px;
   font-weight: 600;
@@ -213,8 +213,8 @@
 }
 
 .wf-run-btn:hover:not(:disabled) {
-  background: rgba(249, 115, 22, 0.22);
-  border-color: rgba(249, 115, 22, 0.55);
+  background: rgba(34, 211, 238, 0.22);
+  border-color: rgba(34, 211, 238, 0.55);
 }
 
 .wf-run-btn:disabled {
@@ -427,9 +427,10 @@
 
 .wf-open__section-title {
   padding: 10px 18px 4px;
+  font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-weight: 500;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-placeholder);
 }
@@ -593,7 +594,7 @@
 }
 
 .wf-folder--over {
-  background: rgba(249, 115, 22, 0.1);
+  background: rgba(34, 211, 238, 0.1);
   color: var(--accent-soft);
 }
 
@@ -875,7 +876,7 @@
 
 .wf-node--running {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.4), 0 2px 12px rgba(249, 115, 22, 0.15);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.4), 0 2px 12px rgba(34, 211, 238, 0.15);
 }
 
 .wf-node--waiting {
@@ -929,7 +930,7 @@
 }
 
 .wf-node__status--running {
-  background: rgba(249, 115, 22, 0.18);
+  background: rgba(34, 211, 238, 0.18);
   color: var(--accent-soft);
 }
 
@@ -1220,7 +1221,7 @@
 }
 
 .wf-panel__resizer:hover {
-  background: rgba(249, 115, 22, 0.35);
+  background: rgba(34, 211, 238, 0.35);
 }
 
 .wf-panel__inner {
@@ -1266,9 +1267,10 @@
 }
 
 .wf-panel__group-title {
+  font-family: var(--font-mono);
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
   color: var(--border-hover);
   display: flex;
   align-items: center;

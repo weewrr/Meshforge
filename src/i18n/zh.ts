@@ -193,12 +193,12 @@ export const zh: typeof en = {
       online: '在线',
       offline: '离线',
       docsLabel: '文档',
-      docsDesc: '指南和 API 参考。',
+      docsDesc: '项目 README 与使用指南。',
       open: '打开',
       githubLabel: 'GitHub',
       githubDesc: '源代码和问题反馈。',
       licensesLabel: '开源许可证',
-      licensesDesc: '此应用中使用的第三方许可证。',
+      licensesDesc: '本项目采用 MIT 许可证。',
       view: '查看'
     }
   },

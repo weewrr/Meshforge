@@ -5,50 +5,51 @@
 @import '@fontsource/jetbrains-mono/400.css';
 @import '@fontsource/jetbrains-mono/500.css';
 
-/* ─── Forge design language ─────────────────────────────────────────────────
-   Deep neutral-black elevation ramp + molten-orange brand accent (the "forge"),
+/* ─── Blueprint design language ─────────────────────────────────────────────
+   Deep navy "drafting paper" elevation ramp + drafting-cyan ink accent,
    cool data-type hues (sky / rose / violet / green) for ports & node kinds,
-   violet as the AI/chat secondary. All legacy token names are preserved so the
-   full stylesheet keeps working; one-off leftovers are re-pointed at the ramp. */
+   violet as the AI/chat secondary, and a graph-paper grid for canvases.
+   All legacy token names are preserved so the full stylesheet keeps working;
+   one-off leftovers are re-pointed at the ramp. */
 
 :root {
   /* backgrounds (deepest → surface) */
-  --bg-app: #0b0c0f;
-  --bg-panel: #0f1116;
-  --bg-input: #13161d;
-  --bg-elevated: #14171e;
-  --bg-surface: #161a21;
-  --bg-hover: #1d222b;
-  --bg-active: #222734;
-  --bg-selected: #262c3a;
+  --bg-app: #090d15;
+  --bg-panel: #0c111d;
+  --bg-input: #0f1524;
+  --bg-elevated: #11192b;
+  --bg-surface: #132035;
+  --bg-hover: #19273f;
+  --bg-active: #1e2e4c;
+  --bg-selected: #243859;
 
   /* borders */
-  --border: #1c2027;
-  --border-soft: #232833;
-  --border-strong: #363d4c;
-  --border-hover: #465064;
-  --border-faint: #525d73;
+  --border: #1a2438;
+  --border-soft: #253250;
+  --border-strong: #384a70;
+  --border-hover: #4d639a;
+  --border-faint: #5c719e;
 
   /* text */
-  --text: #e9ebf1;
-  --text-bright: #dee2ea;
-  --text-secondary: #aab3c5;
-  --text-muted: #8d96ab;
-  --text-faint: #6d7689;
-  --text-placeholder: #586172;
+  --text: #e8eef8;
+  --text-bright: #dce6f3;
+  --text-secondary: #a9b7d2;
+  --text-muted: #8795b0;
+  --text-faint: #67748f;
+  --text-placeholder: #4e5b74;
 
-  /* brand / accent — forge orange */
-  --accent: #f97316;
-  --accent-hover: #fb8c3c;
-  --accent-soft: #fdba74;
-  --accent-active: #e0670f;
-  --on-accent: #1c1006;
+  /* brand / accent — drafting cyan */
+  --accent: #22d3ee;
+  --accent-hover: #4adcf3;
+  --accent-soft: #7fe8f7;
+  --accent-active: #0ca5c4;
+  --on-accent: #04222c;
 
   /* status */
   --success: #4ade80;
-  --success-deep: #34b46c;
-  --warning: #facc15;
-  --warning-deep: #ca8a04;
+  --success-deep: #2fbd6f;
+  --warning: #fbbf24;
+  --warning-deep: #d99e0b;
   --danger: #f87171;
   --danger-deep: #e5484d;
   --danger-solid: #d92d20;
@@ -61,33 +62,33 @@
   --white: #ffffff;
 
   /* component-specific surfaces / hues (re-pointed at the new ramp) */
-  --bg-canvas: #0e1015;
-  --bg-panel-deep: #0d0f14;
-  --bg-inset: #0d0f13;
-  --bg-overlay: #12151b;
-  --bg-app-deep: #090a0d;
-  --bg-black: #070809;
-  --bg-panel-soft: #171b23;
-  --border-dim: #20242e;
-  --border-faint2: #232838;
-  --border-dark: #1e222c;
-  --text-quiet: #3d4354;
-  --text-soft: #9ba4b6;
-  --text-tint: #c5cbd7;
-  --text-light: #cbd0dc;
-  --text-glow: #d6dae4;
-  --text-bright2: #d4d9e4;
-  --text-muted2: #8b94a7;
-  --text-dim: #2e3340;
+  --bg-canvas: #0a0e18;
+  --bg-panel-deep: #0b0f1a;
+  --bg-inset: #0a0e17;
+  --bg-overlay: #101828;
+  --bg-app-deep: #070a11;
+  --bg-black: #070a10;
+  --bg-panel-soft: #101827;
+  --border-dim: #1c2740;
+  --border-faint2: #263455;
+  --border-dark: #19233a;
+  --text-quiet: #39445c;
+  --text-soft: #9aa8c4;
+  --text-tint: #c3cde0;
+  --text-light: #c9d3e4;
+  --text-glow: #d4ddef;
+  --text-bright2: #d2dcee;
+  --text-muted2: #8a97b2;
+  --text-dim: #2c3854;
   --violet-solid: #8d74ff;
   --violet-deep: #7c5cff;
   --success-bright: #34d399;
-  --success-soft: #72cf9b;
+  --success-soft: #6fd3a0;
   --success-border: #2f6b4c;
   --warning-bright: #fde047;
   --warning-solid: #eab308;
   --warning-soft: #e8c56a;
-  --warning-surface: #38300f;
+  --warning-surface: #33290d;
   --warning-border: #8a7a1f;
   --warning-text: #f5e9ae;
   --danger-bright: #ff8585;
@@ -99,38 +100,44 @@
   /* single-use leftovers */
 
   /* status soft backgrounds */
-  --accent-soft-bg: rgba(249, 115, 22, 0.14);
-  --success-soft-bg: rgba(74, 222, 128, 0.14);
-  --danger-soft-bg: rgba(239, 68, 68, 0.14);
-  --warning-soft-bg: rgba(250, 204, 21, 0.13);
-  --accent-glow: rgba(249, 115, 22, 0.16);
-  --accent-glow-strong: rgba(249, 115, 22, 0.35);
+  --accent-soft-bg: rgba(34, 211, 238, 0.12);
+  --success-soft-bg: rgba(74, 222, 128, 0.12);
+  --danger-soft-bg: rgba(239, 68, 68, 0.12);
+  --warning-soft-bg: rgba(251, 191, 36, 0.12);
+  --accent-glow: rgba(34, 211, 238, 0.14);
+  --accent-glow-strong: rgba(34, 211, 238, 0.3);
+
+  /* graph-paper grid (workflows canvas + 3D viewport floor) */
+  --grid-line: rgba(96, 165, 250, 0.07);
+  --grid-line-strong: rgba(125, 211, 252, 0.14);
+  --viewer-grid-major: #3d6289;
+  --viewer-grid-minor: #1c2e4a;
 
   /* translucent surfaces (theme-dependent — dark defaults, light overrides below) */
-  --bg-scrim: rgba(8, 9, 12, 0.7);
-  --bg-scrim-soft: rgba(10, 11, 15, 0.45);
-  --bg-glass: rgba(26, 29, 37, 0.6);
-  --bg-glass-soft: rgba(15, 17, 21, 0.4);
-  --bg-glass-strong: rgba(24, 27, 35, 0.95);
-  --border-glass: rgba(58, 63, 77, 0.5);
+  --bg-scrim: rgba(5, 8, 14, 0.7);
+  --bg-scrim-soft: rgba(7, 10, 18, 0.45);
+  --bg-glass: rgba(22, 31, 51, 0.6);
+  --bg-glass-soft: rgba(13, 18, 30, 0.4);
+  --bg-glass-strong: rgba(19, 27, 46, 0.95);
+  --border-glass: rgba(70, 90, 130, 0.5);
 
   /* elevation */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
-  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-1: 0 1px 2px rgba(2, 6, 12, 0.5);
+  --shadow-2: 0 4px 16px rgba(2, 6, 12, 0.5);
+  --shadow-pop: 0 8px 28px rgba(2, 6, 12, 0.6), 0 0 0 1px rgba(160, 200, 255, 0.05);
+  --shadow-modal: 0 16px 48px rgba(2, 6, 12, 0.65), 0 0 0 1px rgba(160, 200, 255, 0.06);
 
-  /* layout */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  /* layout — drafting-sharp corners */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --font-sans: 'Inter', 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
-  --ease: var(--ease);
+  --ease: 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* ─── Design tokens ───────────────────────────────────────────────────────── */
@@ -189,41 +196,41 @@
 }
 
 
-/* ─── Light theme (Forge daylight) ──────────────────────────────────────────
+/* ─── Light theme (Drafting daylight) ───────────────────────────────────────
    Full token override; activated via `data-theme="light"` on <html> from the
    app store (Settings → Appearance). Same structure as the dark ramp. */
 
 :root[data-theme='light'] {
   /* backgrounds (deepest → surface) */
-  --bg-app: #f6f7f9;
-  --bg-panel: #ffffff;
-  --bg-input: #f0f2f5;
+  --bg-app: #edf1f7;
+  --bg-panel: #f7f9fc;
+  --bg-input: #e8edf5;
   --bg-elevated: #ffffff;
-  --bg-surface: #f0f2f5;
-  --bg-hover: #e7eaef;
-  --bg-active: #dde2e9;
-  --bg-selected: #d6ddec;
+  --bg-surface: #e3e9f3;
+  --bg-hover: #d9e1ee;
+  --bg-active: #cfd9ea;
+  --bg-selected: #c2cfe6;
 
   /* borders */
-  --border: #e1e5ec;
-  --border-soft: #e8ebf1;
-  --border-strong: #c7cfdb;
-  --border-hover: #96a2b8;
-  --border-faint: #8a97ad;
+  --border: #d8dfec;
+  --border-soft: #e2e8f2;
+  --border-strong: #b4c1d8;
+  --border-hover: #7e8fac;
+  --border-faint: #6e7e9c;
 
   /* text */
-  --text: #1b1e26;
-  --text-bright: #101216;
-  --text-secondary: #454c5c;
-  --text-muted: #5d6577;
-  --text-faint: #798192;
-  --text-placeholder: #9aa2b2;
+  --text: #1a2434;
+  --text-bright: #101828;
+  --text-secondary: #47546a;
+  --text-muted: #5f6c85;
+  --text-faint: #79859b;
+  --text-placeholder: #9aa5ba;
 
-  /* brand / accent — forge orange, deepened for white-on-orange contrast */
-  --accent: #e0670f;
-  --accent-hover: #c95a08;
-  --accent-soft: #c2410c;
-  --accent-active: #b54e05;
+  /* brand / accent — drafting cyan, deepened for white-on-cyan contrast */
+  --accent: #0e7490;
+  --accent-hover: #0c617a;
+  --accent-soft: #0a6a85;
+  --accent-active: #0a556c;
   --on-accent: #ffffff;
 
   /* status */
@@ -236,31 +243,31 @@
   --danger-solid: #dc2626;
 
   /* secondary hues */
-  --violet: #9333ea;
-  --violet-soft: #7c3aed;
+  --violet: #7c3aed;
+  --violet-soft: #6d28d9;
   --sky: #0369a1;
-  --rose: #e11d48;
+  --rose: #be123c;
   --white: #ffffff;
 
   /* component-specific surfaces */
-  --bg-canvas: #eef0f3;
-  --bg-panel-deep: #edeff2;
-  --bg-inset: #eceef1;
+  --bg-canvas: #e9eef5;
+  --bg-panel-deep: #eef2f8;
+  --bg-inset: #eceff5;
   --bg-overlay: #ffffff;
-  --bg-app-deep: #e8eaee;
-  --bg-black: #dfe2e7;
-  --bg-panel-soft: #f4f5f7;
-  --border-dim: #dfe3ea;
-  --border-faint2: #d8dde6;
-  --border-dark: #d4d9e2;
-  --text-quiet: #b3bac6;
-  --text-soft: #6b7383;
-  --text-tint: #2c313c;
-  --text-light: #333945;
-  --text-glow: #262b34;
-  --text-bright2: #1f242d;
-  --text-muted2: #5c6474;
-  --text-dim: #8d95a5;
+  --bg-app-deep: #e4e9f1;
+  --bg-black: #e2e8f1;
+  --bg-panel-soft: #f1f4f9;
+  --border-dim: #dbe2ed;
+  --border-faint2: #d4dce9;
+  --border-dark: #d0d8e5;
+  --text-quiet: #b6c0d2;
+  --text-soft: #6b7890;
+  --text-tint: #2d3a50;
+  --text-light: #34405a;
+  --text-glow: #293548;
+  --text-bright2: #202b40;
+  --text-muted2: #5b6880;
+  --text-dim: #8b97ab;
   --violet-solid: #7c3aed;
   --violet-deep: #6d28d9;
   --success-bright: #16a34a;
@@ -280,26 +287,32 @@
   --danger-border: #e4a1a1;
 
   /* status soft backgrounds */
-  --accent-soft-bg: rgba(224, 103, 15, 0.12);
-  --success-soft-bg: rgba(21, 128, 61, 0.12);
-  --danger-soft-bg: rgba(220, 38, 38, 0.1);
-  --warning-soft-bg: rgba(180, 83, 9, 0.12);
-  --accent-glow: rgba(224, 103, 15, 0.16);
-  --accent-glow-strong: rgba(224, 103, 15, 0.32);
+  --accent-soft-bg: rgba(14, 116, 144, 0.1);
+  --success-soft-bg: rgba(21, 128, 61, 0.1);
+  --danger-soft-bg: rgba(220, 38, 38, 0.08);
+  --warning-soft-bg: rgba(180, 83, 9, 0.1);
+  --accent-glow: rgba(14, 116, 144, 0.14);
+  --accent-glow-strong: rgba(14, 116, 144, 0.26);
+
+  /* graph-paper grid */
+  --grid-line: rgba(30, 90, 150, 0.07);
+  --grid-line-strong: rgba(23, 90, 140, 0.14);
+  --viewer-grid-major: #9db8d4;
+  --viewer-grid-minor: #c5d3e4;
 
   /* translucent surfaces */
-  --bg-scrim: rgba(15, 18, 24, 0.45);
-  --bg-scrim-soft: rgba(15, 18, 24, 0.25);
+  --bg-scrim: rgba(15, 23, 42, 0.45);
+  --bg-scrim-soft: rgba(15, 23, 42, 0.25);
   --bg-glass: rgba(255, 255, 255, 0.75);
   --bg-glass-soft: rgba(255, 255, 255, 0.55);
   --bg-glass-strong: rgba(255, 255, 255, 0.96);
-  --border-glass: rgba(20, 26, 38, 0.14);
+  --border-glass: rgba(20, 30, 50, 0.14);
 
   /* elevation — softer, tinted shadows */
-  --shadow-1: 0 1px 2px rgba(24, 30, 42, 0.1);
-  --shadow-2: 0 4px 16px rgba(24, 30, 42, 0.12);
-  --shadow-pop: 0 8px 28px rgba(24, 30, 42, 0.16), 0 0 0 1px rgba(24, 30, 42, 0.05);
-  --shadow-modal: 0 16px 48px rgba(24, 30, 42, 0.2), 0 0 0 1px rgba(24, 30, 42, 0.06);
+  --shadow-1: 0 1px 2px rgba(23, 32, 52, 0.1);
+  --shadow-2: 0 4px 16px rgba(23, 32, 52, 0.12);
+  --shadow-pop: 0 8px 28px rgba(23, 32, 52, 0.16), 0 0 0 1px rgba(23, 32, 52, 0.05);
+  --shadow-modal: 0 16px 48px rgba(23, 32, 52, 0.2), 0 0 0 1px rgba(23, 32, 52, 0.06);
 
   color-scheme: light;
 }

@@ -36,7 +36,7 @@ async function createWindow(): Promise<void> {
     minHeight: 640,
     frame: false,
     title: 'Meshforge',
-    backgroundColor: '#0f1115',
+    backgroundColor: '#090d15',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,

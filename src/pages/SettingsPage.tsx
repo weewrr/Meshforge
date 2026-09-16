@@ -571,6 +571,7 @@ function LogsSection() {
 // ─── About ───────────────────────────────────────────────────────────────────
 
 const APP_VERSION = '0.1.0'
+const REPO_URL = 'https://github.com/weewrr/Meshforge'
 
 function AboutSection() {
   const [backendOk, setBackendOk] = useState<boolean | null>(null)
@@ -593,15 +594,15 @@ function AboutSection() {
             </span>
           </Row>
           <Row label={t('settings.about.docsLabel')} description={t('settings.about.docsDesc')}>
-            <LinkButton label={t('settings.about.open')} href="https://github.com/lightningpixel/modly" />
+            <LinkButton label={t('settings.about.open')} href={`${REPO_URL}#readme`} />
           </Row>
         </Card>
         <Card>
           <Row label={t('settings.about.githubLabel')} description={t('settings.about.githubDesc')}>
-            <LinkButton label={t('settings.about.open')} href="https://github.com/lightningpixel/modly" />
+            <LinkButton label={t('settings.about.open')} href={REPO_URL} />
           </Row>
           <Row label={t('settings.about.licensesLabel')} description={t('settings.about.licensesDesc')}>
-            <LinkButton label={t('settings.about.view')} href="https://github.com/lightningpixel/modly/blob/main/LICENSE" />
+            <LinkButton label={t('settings.about.view')} href={`${REPO_URL}/blob/main/LICENSE`} />
           </Row>
         </Card>
       </div>

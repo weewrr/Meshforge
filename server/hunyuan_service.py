@@ -23,6 +23,7 @@ for the MeshForge backend (or leave the default in generators/hunyuan.py).
 
 import argparse
 import io
+import logging
 import os
 import tempfile
 import threading
@@ -32,6 +33,8 @@ from pathlib import Path
 import numpy as np
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import Response
+
+logger = logging.getLogger('hunyuan')
 
 # ─── Heavy imports are deferred to module load so --help / docs stay light ──
 _IMPORT_LOCK = threading.Lock()
@@ -62,9 +65,9 @@ def _load_pipeline(model_root: str, device: str) -> object:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         dtype = torch.float16 if device == 'cuda' else torch.float32
         if device == 'cuda':
-            print(f'[hunyuan] CUDA device: {torch.cuda.get_device_name(0)} '
-                  f'({torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB)',
-                  flush=True)
+            logger.info('CUDA device: %s (%.1f GB)',
+                        torch.cuda.get_device_name(0),
+                        torch.cuda.get_device_properties(0).total_memory / 1e9)
 
         os.environ['HY3DGEN_MODELS'] = model_root
         pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
@@ -215,7 +218,7 @@ def _to_glb(result, reduce_faces: bool, remove_base: bool = True) -> bytes:
             from hy3dgen.shapegen import FaceReducer
             mesh = FaceReducer()(mesh, max_facenum=120_000)
         except Exception as exc:  # noqa: BLE001 - simplification is best-effort
-            print(f'[hunyuan] face reduction skipped: {exc}', flush=True)
+            logger.warning('face reduction skipped: %s', exc)
 
     if isinstance(mesh, trimesh.Trimesh):
         buf = io.BytesIO()
@@ -296,8 +299,11 @@ if __name__ == '__main__':
                         help='load model weights at startup (instead of on first /generate)')
     args = parser.parse_args()
 
+    logging.basicConfig(level=logging.INFO,
+                        format='[hunyuan] %(levelname)s: %(message)s')
+
     if not args.model_root:
-        print('error: --model-root is required (e.g. D:/github/models)')
+        logger.error('--model-root is required (e.g. D:/github/models)')
         raise SystemExit(2)
     os.environ['HY3DGEN_MODELS'] = args.model_root
     if args.device:
@@ -307,17 +313,17 @@ if __name__ == '__main__':
         import threading
 
         def _warmup() -> None:
-            print('[hunyuan] preloading model weights ...', flush=True)
+            logger.info('preloading model weights ...')
             try:
                 _load_pipeline(args.model_root, args.device)
-                print('[hunyuan] model preloaded', flush=True)
+                logger.info('model preloaded')
             except Exception as exc:  # noqa: BLE001
-                print(f'[hunyuan] preload FAILED: {exc}', flush=True)
+                logger.error('preload FAILED: %s', exc)
 
         threading.Thread(target=_warmup, daemon=True).start()
 
     import uvicorn
 
-    print(f'[hunyuan] model root: {args.model_root} (preload={"on" if args.preload else "off"})',
-          flush=True)
+    logger.info('model root: %s (preload=%s)', args.model_root,
+                'on' if args.preload else 'off')
     uvicorn.run(app, host=args.host, port=args.port, log_level='info')

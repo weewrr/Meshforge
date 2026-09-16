@@ -12,7 +12,6 @@
 
 <p align="center">
   <a href="#system-architecture"><img src="https://img.shields.io/badge/dev-Electron%20%2B%20FastAPI-blue" alt="Stack" /></a>
-  <a href="https://github.com/lightningpixel/modly"><img src="https://img.shields.io/badge/based_on-modly-8A2BE2" alt="Based on modly" /></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT-green" alt="License" /></a>
 </p>
 
@@ -27,7 +26,7 @@
   <a href="#license">License</a>
 </p>
 
-> **MeshForge** is an independent, node-based re-implementation of the open-source [Modly](https://github.com/lightningpixel/modly) image-to-3D workflow desktop app. You build a directed graph of **Image / Text / Mesh / Generator / Preview / Wait / While / ForEach** nodes, run it, and turn a single photo into a textured 3D mesh — all locally, targeting consumer GPUs.
+> **MeshForge** is an independent, node-based image-to-3D workflow desktop app. You build a directed graph of **Image / Text / Mesh / Generator / Preview / Wait / While / ForEach** nodes, run it, and turn a single photo into a textured 3D mesh — all locally, targeting consumer GPUs.
 
 ***
 
@@ -278,6 +277,17 @@ Claude Desktop — add to `~/.config/claude/claude_desktop_config.json`:
 
 Adjust the two absolute paths to your clone location. For real GPU generation the Hunyuan inference service on `:8767` must also be running (section above). Smoke-test the handshake anytime with `python scripts\test_mcp_stdio.py`.
 
+### Testing
+
+Regression helpers live in `scripts/` and are wired into npm (they use the backend venv created during setup):
+
+| Command | What it checks | Needs services running? |
+| --- | --- | --- |
+| `npm test` | Runs all offline checks below | No |
+| `npm run test:stdio` | MCP stdio JSON-RPC handshake + tools/list | No |
+| `npm run test:pipeline` | Model download pipeline (mock HF hub: done / pause / cancel / resume) | No |
+| `npm run test:generate` | Real image-to-3D generation through MCP | Yes — `:8766` + `:8767` with weights loaded |
+
 ***
 
 ## Extensions
@@ -320,7 +330,7 @@ Dependency-free internalization layer (Zustand + `localStorage`). Switch under *
 
 ## Acknowledgements
 
-Built as an independent re-implementation of the workflow UX of [lightningpixel/modly](https://github.com/lightningpixel/modly).
+Built as an independent of the workflow UX of [lightningpixel/modly](https://github.com/lightningpixel/modly).
 
 ***
 

@@ -74,18 +74,18 @@ export function Sidebar() {
   )
 }
 
-/** Brand mark: isometric forge cube with molten gradient + dark edge lines. */
+/** Brand mark: isometric blueprint cube with cyan ink gradient + dark edge lines. */
 function BrandMark({ size = 17 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <defs>
         <linearGradient id="mf-brand-grad" x1="4" y1="3" x2="20" y2="21" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#fb923c" />
-          <stop offset="1" stopColor="#ea580c" />
+          <stop offset="0" stopColor="#67e8f9" />
+          <stop offset="1" stopColor="#0891b2" />
         </linearGradient>
       </defs>
       <path d="M12 2.6l8.4 4.85v9.1L12 21.4l-8.4-4.85v-9.1L12 2.6z" fill="url(#mf-brand-grad)" />
-      <path d="M12 2.6v9.35m0 0l8.4-4.5M12 11.95L3.6 7.45" stroke="#0b0c0f" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M12 2.6v9.35m0 0l8.4-4.5M12 11.95L3.6 7.45" stroke="#090d15" strokeWidth="1.4" strokeLinejoin="round" />
     </svg>
   )
 }

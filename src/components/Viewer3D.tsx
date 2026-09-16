@@ -3,6 +3,7 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, TransformControls, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Group, Mesh } from 'three'
+import { useAppStore } from '../stores/app'
 import { useLogsStore } from '../stores/logs'
 import { useSceneStore, type LightSettings, type ViewMode } from '../stores/scene'
 
@@ -215,6 +216,11 @@ export default function Viewer3D({
   light?: LightSettings
 }) {
   const l = light ?? { ambient: 0.7, main: 1.4, fill: 0.4 }
+  const theme = useAppStore((s) => s.theme)
+  // Drafting-table scene colours — match the Workflows canvas paper per theme.
+  const sceneBg = theme === 'light' ? '#e9eef5' : '#0a0e18'
+  const gridMajor = theme === 'light' ? '#8ba7c9' : '#3d6289'
+  const gridMinor = theme === 'light' ? '#c5d3e6' : '#1c2e4a'
   const viewMode = useSceneStore((s) => s.viewMode)
   const autoRotate = useSceneStore((s) => s.autoRotate)
   const gizmoMode = useSceneStore((s) => s.gizmoMode)
@@ -266,12 +272,12 @@ export default function Viewer3D({
         gl={{ preserveDrawingBuffer: true }}
         onPointerMissed={() => setMeshSelected(false)}
       >
-        <color attach="background" args={['#0e1015']} />
+        <color attach="background" args={[sceneBg]} />
         <ambientLight intensity={l.ambient} />
         <directionalLight position={[3, 4, 2]} intensity={l.main} />
         <directionalLight position={[-3, -1, -2]} intensity={l.fill} />
-        {/* Persistent ground grid — CAD/DCC style, always visible (modly parity). */}
-        <gridHelper args={[10, 20, '#3a3a42', '#232329']} />
+        {/* Persistent ground grid — blueprint drafting floor, always visible. */}
+        <gridHelper args={[10, 20, gridMajor, gridMinor]} />
         {url ? (
           <Suspense fallback={null}>
             <Model

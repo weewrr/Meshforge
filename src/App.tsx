@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import ErrorBoundary, { type ErrorBoundaryFallbackProps } from './components/ErrorBoundary'
 import { Sidebar, TitleBar } from './components/Chrome'
 import { useT } from './i18n'
+import { useAppStore } from './stores/app'
 import { useLogsStore } from './stores/logs'
 import { useNavigationStore } from './stores/navigation'
 
@@ -36,6 +37,14 @@ export default function App() {
   const page = useNavigationStore((s) => s.page)
   const [crash, setCrash] = useState<{ reason: string; at: number } | null>(null)
   const t = useT()
+
+  // The store applies persisted UI attrs (theme/font/zoom) at module init,
+  // but in environments where localStorage settles after module eval (e.g.
+  // embedded browsers) that first pass can read defaults. Re-apply once React
+  // is up so <html> always matches the hydrated store.
+  useEffect(() => {
+    useAppStore.getState().applyUi()
+  }, [])
 
   // Crash recovery banner: the main process auto-reloads the renderer after a
   // render-process-gone / unresponsive event and stashes the reason. We ask

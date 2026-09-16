@@ -192,12 +192,12 @@ export const en = {
       online: 'online',
       offline: 'offline',
       docsLabel: 'Documentation',
-      docsDesc: 'Guides and API reference.',
+      docsDesc: 'Project README and guides.',
       open: 'Open',
       githubLabel: 'GitHub',
       githubDesc: 'Source code and issues.',
       licensesLabel: 'Open-source licenses',
-      licensesDesc: 'Third-party licenses used in this app.',
+      licensesDesc: 'This project is MIT-licensed.',
       view: 'View'
     }
   },

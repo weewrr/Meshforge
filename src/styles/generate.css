@@ -51,8 +51,9 @@
 
 .gp-panel__title {
   margin: 0;
-  font-size: 11px;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 1.5px;
   color: var(--text-faint);
@@ -307,7 +308,7 @@
 
 .gp-textarea:focus {
   outline: none;
-  border-color: rgba(251, 191, 36, 0.4);
+  border-color: rgba(34, 211, 238, 0.45);
 }
 
 .gp-file {
@@ -375,7 +376,7 @@
   width: 100%;
   padding: 8px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(249, 115, 22, 0.5);
+  border: 1px solid rgba(34, 211, 238, 0.5);
   background: var(--accent-soft-bg);
   color: var(--accent-soft);
   font-size: 11px;
@@ -386,7 +387,7 @@
 }
 
 .gp-continue:hover {
-  background: rgba(249, 115, 22, 0.25);
+  background: rgba(34, 211, 238, 0.22);
 }
 
 /* Generate: Mesh 行 — Use current model 开关 */
@@ -2069,9 +2070,10 @@
   align-items: center;
   padding: 6px 14px;
   border-bottom: 1px solid var(--bg-surface);
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
   color: var(--text-faint);
 }
 

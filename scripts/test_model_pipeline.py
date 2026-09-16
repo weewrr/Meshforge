@@ -18,7 +18,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, r'C:\Users\HELLOWORLD\Desktop\oss\meshforge\server')
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / 'server'))
 from routers import model  # noqa: E402
 from generators.registry import MODELS_DIR  # noqa: E402
 

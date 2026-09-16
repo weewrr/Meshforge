@@ -113,9 +113,10 @@ body {
 }
 
 .titlebar__app {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.6px;
   color: var(--text-secondary);
 }
 
@@ -277,7 +278,7 @@ body {
 }
 
 .sidebar__item--active .sidebar__icon {
-  filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.45));
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.45));
 }
 
 .sidebar__label {
@@ -313,7 +314,7 @@ button:disabled {
 
 .primary:not(:disabled):hover {
   background: var(--accent-hover);
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .primary:not(:disabled):active {

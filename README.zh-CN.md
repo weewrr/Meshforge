@@ -14,7 +14,6 @@
 
 <p align="center">
   <a href="#系统架构"><img src="https://img.shields.io/badge/dev-Electron%20%2B%20FastAPI-blue" alt="技术栈" /></a>
-  <a href="https://github.com/lightningpixel/modly"><img src="https://img.shields.io/badge/based_on-modly-8A2BE2" alt="基于 modly" /></a>
   <a href="#许可"><img src="https://img.shields.io/badge/license-MIT-green" alt="许可证" /></a>
 </p>
 
@@ -29,7 +28,7 @@
   <a href="#许可">许可</a>
 </p>
 
-> **MeshForge** 是对开源项目 [Modly](https://github.com/lightningpixel/modly) 的独立复刻（图生 3D 桌面应用）：以**工作流节点图**来组织处理流程——搭建一张由 **Image / Text / Mesh / Generator / Preview / Wait / While / ForEach** 节点组成的有向图，运行它，即可把一张照片变成带纹理的 3D 网格。全程本地运行，面向消费级 GPU。
+> **MeshForge** 是开源项目图生 3D 桌面应用：以**工作流节点图**来组织处理流程——搭建一张由 **Image / Text / Mesh / Generator / Preview / Wait / While / ForEach** 节点组成的有向图，运行它，即可把一张照片变成带纹理的 3D 网格。全程本地运行，面向消费级 GPU。
 
 ***
 
@@ -280,6 +279,17 @@ Claude Desktop —— 在 `~/.config/claude/claude_desktop_config.json` 中添�
 
 请把两处绝对路径改为你本地的克隆路径。要进行真实 GPU 生成，还需要 :8767 的 Hunyuan 推理服务在运行（见上一节）。随时可用 `python scripts\test_mcp_stdio.py` 做握手冒烟测试。
 
+### 测试
+
+回归脚本在 `scripts/` 目录，并已接入 npm（自动使用安装阶段创建的后端 venv）：
+
+| 命令 | 检查内容 | 需要服务在运行？ |
+| --- | --- | --- |
+| `npm test` | 运行下面所有离线检查 | 否 |
+| `npm run test:stdio` | MCP stdio JSON-RPC 握手 + tools/list | 否 |
+| `npm run test:pipeline` | 模型下载管线（mock HF Hub：完成/暂停/取消/续传） | 否 |
+| `npm run test:generate` | 经 MCP 跑一次真实图生 3D | 是 — `:8766` + `:8767` 且权重已加载 |
+
 ***
 
 ## 扩展
@@ -322,7 +332,7 @@ Claude Desktop —— 在 `~/.config/claude/claude_desktop_config.json` 中添�
 
 ## 致谢
 
-作为对 [lightningpixel/modly](https://github.com/lightningpixel/modly) 工作流交互的独立复刻而构建。
+作为对 [lightningpixel/modly](https://github.com/lightningpixel/modly) 工作流交互的独立而构建。
 
 ***
 

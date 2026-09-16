@@ -5,7 +5,7 @@
 @import '@fontsource/jetbrains-mono/400.css';
 @import '@fontsource/jetbrains-mono/500.css';
 
-/* ─── MeshForge stylesheet (Forge design language) ────────────────────────
+/* ─── MeshForge stylesheet (Blueprint design language) ────────────────────
    Split by concern; import order defines the cascade:
    tokens → shell → generate → workflows → content → a11y → settings → misc */
 @import './styles/tokens.css';

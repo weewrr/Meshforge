@@ -1,7 +1,14 @@
+/**
+ * 设置页共享的 UI 原语（分区容器、行控件等）。
+ *
+ * 对应参考项目 Modly 的 @shared/ui 构件，但用本仓库的 st-* 类渲染，
+ * 让所有设置分区保持同一套间距与排版，而无需各写一套样式。
+ */
+
 import type { ReactNode } from 'react'
 
 // ─── Shared settings primitives ─────────────────────────────────────────────
-// Port of Modly's @shared/ui building blocks, rendered with local st-* classes.
+// 移植自 Modly 的 @shared/ui 构件，用本仓库的 st-* 类渲染。
 
 export function Section({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
@@ -15,9 +22,10 @@ export function Section({ title, subtitle, children }: { title: string; subtitle
   )
 }
 
-export function Card({ title, description, children }: { title?: string; description?: string; children: ReactNode }) {
+/** 设置卡片：可选的标题 / 描述头部 + 内容主体。 */
+export function Card({ title, description, className, children }: { title?: string; description?: string; className?: string; children: ReactNode }) {
   return (
-    <div className="st-card">
+    <div className={`st-card${className ? ` ${className}` : ''}`}>
       {(title || description) && (
         <div className="st-card__head">
           {title && <p className="st-card__title">{title}</p>}
@@ -119,6 +127,7 @@ export function Select<T extends string>({ value, onChange, options, ariaLabel }
   )
 }
 
+/** 外链按钮：点击在新标签打开 `href`，右侧带箭头图标。 */
 export function LinkButton({ label, href }: { label: string; href?: string }) {
   return (
     <button className="st-linkbtn" onClick={() => href && window.open(href, '_blank')}>

@@ -243,6 +243,24 @@ Design note: the lightweight MeshForge backend stays free of PyTorch — the mod
 
 ***
 
+## Built-in Generators & Categories
+
+The generator roster now separates model outputs by a `category` that the UI groups and colors accordingly:
+
+| Category | Meaning | Output | Built-in adapters (port) |
+|---|---|---|---|
+| `mesh` | image → 3D mesh | GLB | Hunyuan3D-2 Turbo (8768) / standard (8775) · Hunyuan3D-2 MV Turbo (8771) / fast (8774) / standard (8776) · InstantMesh large (8770) / base (8777) |
+| `multiview` | image → multiview sheet (PNG) | PNG sheet | MVDream · text-driven 4 views (8780) · Stable Zero123 (8781) · Wonder3D Plus · 6 views (8782) |
+| `process` | mesh → mesh tools | mesh | repair · smoother · remesher · optimizer · exporter |
+
+`multiview` generators return a single PNG contact sheet rather than a mesh, so they are shown as "视图模型" (image views) on the Models page and as teal nodes in the workflow palette — distinct from "建模模型" (mesh) generators and "处理器" (process) tools.
+
+Mesh processing tools run on CPU (trimesh + numpy). When `pymeshlab` is installed (`server/requirements.txt`) they upgrade to QEM decimation, robust non-manifold repair and hole closing (this is optional — they fall back to the pure-numpy paths otherwise).
+
+A curated image-preprocessing list (matting / upscale / depth-normal-camera / edge) with ModelScope links and ✓ usable / ⚠ mislabeled marks lives in `server/configs/image_preprocess_models.json`.
+
+***
+
 ## MCP Server (Claude Desktop / Codex)
 
 Expose MeshForge to external AI agents through the [Model Context Protocol](https://modelcontextprotocol.io). The backend already runs on `http://127.0.0.1:8766` (start the app, or `uvicorn main:app`); `server/mcp_server.py` is a thin stdio adapter over it:
@@ -325,6 +343,14 @@ Dependency-free internalization layer (Zustand + `localStorage`). Switch under *
 - [x] Crash recovery, backend watchdog, install rollback
 
 - [x] Wire the real **Hunyuan3D-2-mini** inference model (local GPU, image → mesh)
+
+- [x] Generator categories (`mesh` / `multiview` / `process`) with grouped, color-coded UI
+
+- [x] Built-in **multiview** (image → PNG sheet) models — MVDream / Stable Zero123 / Wonder3D Plus
+
+- [x] CPU mesh tools upgraded — Taubin smoothing, QEM remesh, non-manifold repair (+ optional `pymeshlab`)
+
+- [x] Curated image-preprocessing model list (`server/configs/image_preprocess_models.json`)
 
 ***
 

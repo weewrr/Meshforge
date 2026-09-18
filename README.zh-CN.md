@@ -245,6 +245,24 @@ MeshForge 默认附带 CPU **mock 浮雕**生成器，UI 开箱即用。若要�
 
 ***
 
+## 内置生成器与分类
+
+生成器体系现在按 `category` 区分输出类型，界面据此分组并着色：
+
+| 分类 | 含义 | 输出 | 内置适配器（端口） |
+|---|---|---|---|
+| `mesh` | 图片 → 3D 网格 | GLB | Hunyuan3D-2 Turbo (8768) / 标准 (8775) · Hunyuan3D-2 MV Turbo (8771) / fast (8774) / 标准 (8776) · InstantMesh 大档 (8770) / 低档 (8777) |
+| `multiview` | 图片 → 多视图拼图 | PNG 拼图 | MVDream · 文本驱动 4 视图 (8780) · Stable Zero123 (8781) · Wonder3D Plus · 6 视图 (8782) |
+| `process` | 网格 → 网格工具 | 网格 | repair · smoother · remesher · optimizer · exporter |
+
+`multiview` 生成器返回一张多视图 PNG 拼图（不是网格），在 Models 页按「视图模型」单独展示、在工作流画布中以青绿色节点出现，与「建模模型」（网格）生成器和「处理器」（process）工具区分开。
+
+网格处理工具基于 CPU（trimesh + numpy）。当安装了 `pymeshlab`（见 `server/requirements.txt`）时，它们自动升级为 QEM 减面、稳健的非流形修复与孔洞闭合（可选——缺失时回退到纯 numpy 实现）。
+
+一份经过核对、带 ModelScope 链接与 ✓ 可用 / ⚠ 错位标记的图像预处理模型清单（抠图 / 超分 / 深度·法线·相机 / 边缘）位于 `server/configs/image_preprocess_models.json`。
+
+***
+
 ## MCP Server（Claude Desktop / Codex）
 
 通过 [Model Context Protocol](https://modelcontextprotocol.io) 把 MeshForge 暴露给外部 AI 智能体。后端本身运行在 `http://127.0.0.1:8766`（启动应用，或 `uvicorn main:app`）；`server/mcp_server.py` 是一个极薄的 stdio 适配层：
@@ -327,6 +345,14 @@ Claude Desktop —— 在 `~/.config/claude/claude_desktop_config.json` 中添�
 - [x] 崩溃恢复、后端看门狗、安装回滚
 
 - [x] 接入真实的 **Hunyuan3D-2-mini** 推理模型（本地 GPU，图生网格）
+
+- [x] 生成器分类（`mesh` / `multiview` / `process`）并分组、着色展示
+
+- [x] 内置 **多视图**（图 → PNG 拼图）模型 —— MVDream / Stable Zero123 / Wonder3D Plus
+
+- [x] CPU 网格工具升级 —— Taubin 平滑、QEM 减面、非流形修复（可选 `pymeshlab`）
+
+- [x] 图像预处理模型清单（`server/configs/image_preprocess_models.json`）
 
 ***
 

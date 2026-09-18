@@ -293,6 +293,101 @@
   background: rgba(56, 189, 248, 0.05);
 }
 
+/* ─── 四视角（MV） ─────────────────────────────────────────────────────────── */
+.gp-image__corner {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius-sm);
+}
+
+.gp-mv-badge {
+  margin-left: auto;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: var(--radius-sm);
+}
+
+.gp-mv {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.gp-mv-slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  overflow: hidden;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-faint);
+}
+
+.gp-mv-slot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gp-mv-slot--empty {
+  border-style: dashed;
+}
+
+.gp-mv-slot--empty:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.gp-mv-slot__label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0);
+  color: transparent;
+  transition: background var(--ease), color var(--ease);
+}
+
+.gp-mv-slot:not(.gp-mv-slot--empty) svg {
+  display: none;
+}
+
+.gp-mv-slot:hover .gp-mv-slot__label {
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+
+.gp-mv-slot--empty .gp-mv-slot__label {
+  position: static;
+  background: none;
+  color: inherit;
+}
+
+.gp-mv-slot--empty:hover .gp-mv-slot__label {
+  background: none;
+  color: inherit;
+}
+
 .gp-textarea {
   width: 100%;
   background: var(--bg-surface);
@@ -1423,6 +1518,40 @@
 .gp-viewer__canvas {
   position: absolute;
   inset: 0;
+}
+
+/* 模型加载中的 DOM 浮层（drei <Html> 挂到画布之上）。 */
+.gp-viewer__loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  background: var(--bg-glass-soft);
+  border: 1px solid var(--border-strong);
+  color: var(--text-bright);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.gp-viewer__loadingspin {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent, #22d3ee);
+  border-radius: 50%;
+  animation: gp-spin 0.8s linear infinite;
+}
+
+@keyframes gp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.gp-viewer__loadinglabel {
+  opacity: 0.9;
 }
 
 .gp-vt {

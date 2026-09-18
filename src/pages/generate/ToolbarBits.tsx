@@ -1,6 +1,15 @@
-import { useEffect, useState } from 'react'
+/**
+ * 生成页工具栏与浮层小组件。
+ *
+ * 包括灯光/平滑/减面三个设置弹窗、运行时的进度 HUD、查看器加载失败兜底，
+ * 以及顶部工具栏共用的小图标（`ChevronDown`/`Spinner`）与导出格式表。
+ * 这些组件被 `GeneratePage` 拼装成生成页的交互层。
+ */
+
+import { useEffect, useRef, useState } from 'react'
 import { formatElapsed } from './preflight'
 import { useT } from '../../i18n'
+import { toast } from '../../stores/toasts'
 import { DEFAULT_LIGHT, useSceneStore, type LightSettings } from '../../stores/scene'
 import { useWorkflowRunStore } from '../../stores/workflowRun'
 import { useFocusTrap } from '../../hooks/useFocusTrap'
@@ -8,6 +17,7 @@ import type { WFNode } from '../../types'
 
 // ─── 灯光弹窗 ───────────────────────────────────────────────────────────────
 
+/** 灯光设置弹窗：调节环境光/主光/补光强度，含焦点陷阱与一键复位。 */
 export function LightPopover({ settings, onChange, onClose }: {
   settings: LightSettings
   onChange: (patch: Partial<LightSettings>) => void
@@ -52,6 +62,7 @@ export function LightPopover({ settings, onChange, onClose }: {
 
 // ─── Smooth / Decimate 弹窗 ─────────────────────────────────────────────────
 
+/** 平滑弹窗：设置网格平滑迭代次数（1~20），确认后执行平滑处理。 */
 export function SmoothPopover({ smoothing, onSmooth, onClose }: {
   smoothing: boolean
   onSmooth: (iterations: number) => void
@@ -80,6 +91,7 @@ export function SmoothPopover({ smoothing, onSmooth, onClose }: {
   )
 }
 
+/** 减面弹窗：设置目标面数（≥100），实时显示相对当前网格的减面百分比。 */
 export function DecimatePopover({ currentTriangles, decimating, onDecimate, onClose }: {
   currentTriangles: number | null
   decimating: boolean
@@ -87,6 +99,7 @@ export function DecimatePopover({ currentTriangles, decimating, onDecimate, onCl
   onClose: () => void
 }) {
   const t = useT()
+  // 默认目标面数：有当前网格时取一半（典型减面幅度），否则兜底为 5000。
   const defaultTarget = currentTriangles ? Math.round(currentTriangles * 0.5) : 5000
   const [inputValue, setInputValue] = useState(String(defaultTarget))
   const parsed = parseInt(inputValue, 10)
@@ -121,6 +134,7 @@ export function DecimatePopover({ currentTriangles, decimating, onDecimate, onCl
 
 // ─── HUD 浮层（进度/耗时/错误） ──────────────────────────────────────────────
 
+/** 运行时 HUD：展示当前节点、总进度、耗时与失败错误（含复制/重试），运行外不渲染。 */
 export function GenerationHUD({ nodes }: { nodes: WFNode[] }) {
   const t = useT()
   const runState = useWorkflowRunStore((s) => s.runState)
@@ -133,6 +147,23 @@ export function GenerationHUD({ nodes }: { nodes: WFNode[] }) {
   const [copied, setCopied] = useState(false)
 
   const active = runState === 'running' || runState === 'paused'
+
+  // 一次性 toast：失败弹错误提示（带重试），成功弹完成提示。用 ref 记录上一状态，
+  // 只在状态发生"进入"时触发一次，避免每次渲染重复弹出。
+  const prevState = useRef(runState)
+  useEffect(() => {
+    const prev = prevState.current
+    prevState.current = runState
+    if (prev === runState) return
+    if (runState === 'failed' && lastError) {
+      toast.error(t('generate.hud.failed'), {
+        action: { label: t('generate.hud.retry'), onClick: reset },
+      })
+    } else if (runState === 'succeeded') {
+      toast.success(t('generate.hud.succeeded'))
+    }
+  }, [runState, lastError, t, reset])
+
   const visible = active || runState === 'failed'
 
   useEffect(() => {
@@ -148,6 +179,9 @@ export function GenerationHUD({ nodes }: { nodes: WFNode[] }) {
   const activeLabel = nodes.find((n) => n.id === activeNodeId)?.data.label
   const done = nodes.filter((n) => nodeStates[n.id] === 'succeeded').length
   const overall = nodes.length > 0 ? Math.round((done / nodes.length) * 100) : 0
+  // 启动初期（尚无节点完成、也未暂停）：模型加载通常发生在这一阶段，用阶段文案
+  // 提示用户"排队/加载中"，而非笼统的"生成中"，减少冷启动时的等待焦虑。
+  const booting = runState === 'running' && done === 0 && !activeNodeId
 
   return (
     <div className="gp-hud">
@@ -157,7 +191,7 @@ export function GenerationHUD({ nodes }: { nodes: WFNode[] }) {
             <div className="gp-hud__top">
               <div className="gp-hud__label">
                 <span className="gp-hud__dot" style={runState === 'paused' ? { background: '#facc15' } : undefined} />
-                <span>{runState === 'paused' ? t('generate.hud.waitingInput') : (activeLabel ?? t('generate.hud.generating'))}</span>
+                <span>{runState === 'paused' ? t('generate.hud.waitingInput') : (booting ? t('generate.hud.booting') : (activeLabel ?? t('generate.hud.generating')))}</span>
               </div>
               <span className="gp-hud__time">{formatElapsed(elapsed)}</span>
             </div>
@@ -205,6 +239,7 @@ export function GenerationHUD({ nodes }: { nodes: WFNode[] }) {
 
 // ─── Viewer 加载失败兜底 ────────────────────────────────────────────────────
 
+/** 查看器加载失败兜底：网格渲染失败时给出错误、清空与撤销当前网格的操作入口。 */
 export function ViewerLoadError({ error }: { error: Error }) {
   const t = useT()
   const undoMesh = useSceneStore((s) => s.undoMesh)
@@ -232,6 +267,7 @@ export function ViewerLoadError({ error }: { error: Error }) {
 
 // 顶部工具栏小组件
 
+/** 下拉箭头小图标（工具栏/弹窗通用）。 */
 export function ChevronDown() {
   return (
     <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -240,6 +276,7 @@ export function ChevronDown() {
   )
 }
 
+/** 加载转圈小图标（处理中状态通用）。 */
 export function Spinner() {
   return (
     <svg aria-hidden="true" className="gp-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -248,6 +285,7 @@ export function Spinner() {
   )
 }
 
+/** 导出格式列表：每个格式附带其 i18n 描述 key，供导出菜单渲染。 */
 export const EXPORT_FORMATS = [
   { fmt: 'glb' as const, descKey: 'generate.export.formatGlb' },
   { fmt: 'obj' as const, descKey: 'generate.export.formatObj' },

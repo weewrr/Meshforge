@@ -1,19 +1,56 @@
 node_modules/
+
 out/
 dist/
+
 *.log
 
+
+
 server/.venv/
+
 server/workspace/
+
 server/models/
+
 server/__pycache__/
+
 server/**/__pycache__/
+
+# 运行期敏感/易变文件：本地开发态 DATA_DIR 就在 server/ 下，
+# token 文件绝不能进版本库，jobs.db 是运行数据。
+server/.api-token
+server/jobs.db
+
 *.pyc
+
 .DS_Store
 
+
+
 # electron-vite 运行期自动生成的临时配置
+
 electron.vite.config.*.mjs
+
 
 # 本地记忆与临时文件(不上传)
 .workbuddy/
 .ui-check/
+
+# ─── 开发过程痕迹（本地留存，不入库）─────────────────────────────────────────
+
+# 开发过程文档：优化计划 / 代码审查 / 注释报告 / 蓝图。
+# docs/openapi.json 是 API 契约快照，CI openapi:check 依赖，必须跟踪。
+docs/blueprint-roadmap.md
+docs/code-comments-*.md
+docs/code-review-*.md
+docs/optimization-plan-*.md
+
+# 推理服务脚本：内含本机 venv 与绝对路径（D:\github 等），机器绑定。
+scripts/setup-*-server.bat
+scripts/start-*-server.bat
+
+# Python 运行缓存（全局，不限 server/）
+__pycache__/
+.pytest_cache/
+

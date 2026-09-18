@@ -1,3 +1,10 @@
+/**
+ * 焦点圈定 hook（模态框无障碍）。
+ *
+ * 容器挂载时把焦点移入第一个可聚焦元素，Tab 循环被限制在容器内；卸载时把
+ * 焦点归还给打开模态框前所在的元素，避免键盘用户"丢失"位置。
+ */
+
 import { useEffect, useRef, type RefObject } from 'react'
 
 const FOCUSABLE_SELECTOR =
@@ -5,6 +12,8 @@ const FOCUSABLE_SELECTOR =
 
 function getFocusable(container: HTMLElement): HTMLElement[] {
   return [...container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
+    // offsetParent 为 null 说明元素被隐藏（display:none 等），应跳过；
+    // 但当前已聚焦的元素即使不可见也保留，避免焦点丢失。
     (el) => el.offsetParent !== null || el === document.activeElement
   )
 }

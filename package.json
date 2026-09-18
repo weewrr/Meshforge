@@ -10,10 +10,19 @@
     "build": "electron-vite build",
     "pack": "electron-builder --dir",
     "dist": "electron-vite build && electron-builder",
-    "test": "npm run test:stdio && npm run test:pipeline",
+    "test": "npm run test:paths && npm run test:stdio && npm run test:pipeline && npm run test:web",
+    "test:paths": "server\\.venv\\Scripts\\python.exe server/tests/test_paths.py",
+    "test:jobs": "server\\.venv\\Scripts\\python.exe server/tests/test_jobs.py",
+    "test:workflows": "server\\.venv\\Scripts\\python.exe server/tests/test_workflows.py",
+    "test:web": "node scripts/test_web.mjs",
     "test:stdio": "server\\.venv\\Scripts\\python.exe scripts/test_mcp_stdio.py",
     "test:pipeline": "server\\.venv\\Scripts\\python.exe scripts/test_model_pipeline.py",
     "test:generate": "server\\.venv\\Scripts\\python.exe scripts/test_mcp_generate.py",
+    "openapi": "server\\.venv\\Scripts\\python.exe scripts/export_openapi.py",
+    "openapi:check": "server\\.venv\\Scripts\\python.exe scripts/export_openapi.py --check",
+    "sizes": "node scripts/check_bundle_budget.mjs",
+    "lint": "oxlint src electron scripts",
+    "lint:fix": "oxlint --fix src electron scripts",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json"
   },
@@ -38,6 +47,7 @@
     "electron": "^44.1.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
+    "oxlint": "^1.83.0",
     "typescript": "^7.0.2",
     "vite": "^7.3.6"
   }

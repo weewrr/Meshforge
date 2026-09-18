@@ -1,3 +1,11 @@
+/**
+ * 生成页里每个蓝图节点的"参数行"组件。
+ *
+ * 生成页不用画布，而是把节点拍平成一个个参数卡片（`ParamRow`）。本文件按节点类型
+ * 提供对应的参数编辑 UI：图片/文本/网格输入、等待暂停、生成器进度。文件类节点
+ * 同样走原生文件框（绕开 Chromium `<input type=file>` 崩溃）。
+ */
+
 import { useState } from 'react'
 import { fullUrl, importImageByPath, importMeshByPath } from '../../api'
 import { getT, useT } from '../../i18n'
@@ -7,18 +15,23 @@ import type { WFNode } from '../../types'
 
 // ─── 参数行（节点卡片） ─────────────────────────────────────────────────────
 
+/** 参数补丁函数：把对某个节点的局部参数改动回写到工作流 store。 */
 export type PatchFn = (nodeId: string, patch: Record<string, unknown>) => void
 
-export function ImageParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
+// 四视角生成器的侧视角 tag（主图/front 由 ImageParamRow 的 url 承载）。
+const MV_SIDE_TAGS = ['left', 'back', 'right'] as const
+
+/** 图片参数行：原生选择图片并写入节点（`url` / 多视角 `view_<tag>`）。`mv` 时额外渲染左/后/右三视角槽位。 */
+export function ImageParamRow({ node, onPatch, mv = false }: { node: WFNode; onPatch: PatchFn; mv?: boolean }) {
   const t = useT()
   const url = String(node.data.params.url ?? '')
   const [busy, setBusy] = useState(false)
+  const [busyTag, setBusyTag] = useState<string | null>(null)
 
-  // Native-dialog image picker (Modly-aligned), same flow as MeshParamRow: the
-  // Electron main process opens the dialog and only returns an absolute path;
-  // the backend copies the file into workspace/uploads via /upload/from-path.
-  // No <input type=file> → no renderer freeze.
-  async function pickFromDisk(): Promise<void> {
+  // 原生文件选择图片（Modly 对齐），与 MeshParamRow 同一套路：主进程弹框只回传绝对路径，
+  // 后端经 /upload/from-path 把文件拷进 workspace/uploads，全程不碰 <input type=file>，避免渲染冻结。
+  // `tag` 决定写入哪个参数槽位：'front' 为主图（url），否则为侧视角 view_<tag>。
+  async function pickInto(tag: string): Promise<void> {
     if (!window.meshforge?.selectImageFile) {
       useLogsStore.getState().warn(getT('generate.log.imageDialogUnavailable'))
       return
@@ -26,15 +39,27 @@ export function ImageParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchF
     const filePath = await window.meshforge.selectImageFile()
     if (!filePath) return
     setBusy(true)
+    setBusyTag(tag)
     try {
       const { url: imported, fileName } = await importImageByPath(filePath)
-      onPatch(node.id, { url: imported, fileName })
+      if (tag === 'front') {
+        // 主图（必填）即 front 视角：同时回填 url 与 view_front，便于下游读取。
+        onPatch(node.id, {
+          url: imported,
+          fileName,
+          view_front: imported,
+          view_front_name: fileName
+        })
+      } else {
+        onPatch(node.id, { [`view_${tag}`]: imported, [`view_${tag}_name`]: fileName })
+      }
       useLogsStore.getState().log('info', getT('generate.log.imageImported', { name: fileName }))
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       useLogsStore.getState().error(getT('generate.log.imageImportFailed', { detail: msg }))
     } finally {
       setBusy(false)
+      setBusyTag(null)
     }
   }
 
@@ -46,14 +71,16 @@ export function ImageParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchF
           <polyline points="21 15 16 10 5 21" />
         </svg>
         <span>{t('generate.image.label')}</span>
+        {mv && <span className="gp-mv-badge">{t('generate.image.multiView')}</span>}
       </div>
       {url ? (
-        <button className="gp-image" onClick={pickFromDisk} disabled={busy}>
+        <button className="gp-image" onClick={() => void pickInto('front')} disabled={busy}>
           <img src={fullUrl(url)} alt="" />
           <span className="gp-image__change">{busy ? t('generate.common.uploading') : t('generate.common.change')}</span>
+          {mv && <span className="gp-image__corner">{t('generate.image.front')}</span>}
         </button>
       ) : (
-        <button className="gp-image gp-image--empty" onClick={pickFromDisk} disabled={busy}>
+        <button className="gp-image gp-image--empty" onClick={() => void pickInto('front')} disabled={busy}>
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" />
             <polyline points="21 15 16 10 5 21" />
@@ -61,10 +88,37 @@ export function ImageParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchF
           <span>{busy ? t('generate.common.uploading') : t('generate.image.browse')}</span>
         </button>
       )}
+      {mv && (
+        <div className="gp-mv">
+          {MV_SIDE_TAGS.map((tag) => {
+            const vurl = String(node.data.params[`view_${tag}`] ?? '')
+            const picking = busy && busyTag === tag
+            return (
+              <button
+                key={tag}
+                className={`gp-mv-slot ${vurl ? '' : 'gp-mv-slot--empty'}`}
+                onClick={() => void pickInto(tag)}
+                disabled={busy}
+              >
+                {vurl ? <img src={fullUrl(vurl)} alt="" /> : (
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                )}
+                <span className="gp-mv-slot__label">
+                  {picking ? t('generate.common.uploading') : t(`generate.image.${tag}`)}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
+/** 文本参数行：内联文本框编辑节点的 `text` 参数。 */
 export function TextParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
   const t = useT()
   const text = String(node.data.params.text ?? '')
@@ -87,16 +141,15 @@ export function TextParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn
   )
 }
 
+/** 网格参数行：原生选择 3D 网格文件写入节点，或切换到"使用当前模型"模式。 */
 export function MeshParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn }) {
   const t = useT()
   const url = String(node.data.params.url ?? '')
   const fileName = String(node.data.params.fileName ?? '')
   const [busy, setBusy] = useState(false)
 
-  // Native-dialog mesh picker (Modly-aligned). The Electron main process opens
-  // the file dialog and only returns an absolute path; the backend serves /
-  // converts the file via /optimize/import-by-path. No <input type=file> →
-  // no renderer freeze (same flow as the toolbar Import→Mesh).
+  // 原生文件选择网格（Modly 对齐）：主进程弹框只回传绝对路径，后端经
+  // /optimize/import-by-path 提供/转换文件。不碰 <input type=file>，避免渲染冻结（与工具栏导入一致）。
   async function pickFromDisk(): Promise<void> {
     if (!window.meshforge?.selectMeshFile) {
       useLogsStore.getState().warn(getT('generate.log.meshDialogUnavailable'))
@@ -129,7 +182,7 @@ export function MeshParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn
         <span>{t('generate.mesh.label')}</span>
       </div>
 
-      {/* Toggle: use current model */}
+      {/* 开关：使用当前模型而非从文件导入 */}
       <button
         className={`gp-toggle ${source === 'current' ? 'gp-toggle--on' : ''}`}
         onClick={() => onPatch(node.id, { source: source === 'current' ? 'file' : 'current' })}
@@ -164,6 +217,7 @@ export function MeshParamRow({ node, onPatch }: { node: WFNode; onPatch: PatchFn
   )
 }
 
+/** 等待参数行：运行到 Wait 节点停下时，显示「继续」按钮以恢复执行流。 */
 export function WaitParamRow({ nodeId }: { nodeId: string }) {
   const t = useT()
   const nodeState = useWorkflowRunStore((s) => s.nodeStates[nodeId])
@@ -192,6 +246,7 @@ export function WaitParamRow({ nodeId }: { nodeId: string }) {
   )
 }
 
+/** 生成器参数行：展示生成器的名称/类型与目标模型，运行时显示进度百分比。 */
 export function GeneratorParamRow({ node }: { node: WFNode }) {
   const t = useT()
   const nodeState = useWorkflowRunStore((s) => s.nodeStates[node.id])

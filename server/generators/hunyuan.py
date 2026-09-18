@@ -1,16 +1,17 @@
-"""Hunyuan3D-2-mini generator adapter.
+"""Hunyuan3D-2-mini 生成器适配器（对接 HTTP 推理服务）。
 
-Wire-in point for the real model: points at a local inference service
-(recommended: a Hunyuan3D server or ComfyUI exposing an HTTP API) via the
-MESHFORGE_HUNYUAN_URL env var. Loading probes the service; generation POSTs
-the input image and saves the returned GLB.
+真实模型的接入点：通过 `MESHFORGE_HUNYUAN_URL` 指向本地推理服务
+（推荐暴露 HTTP API 的 Hunyuan3D 服务或 ComfyUI）。`load` 探针健康检查；
+`generate` 把输入图片 POST 给服务并落盘返回的 GLB。
 
-If the service is not reachable, load() first tries to auto-start the bundled
-server/hunyuan_service.py inside the hy3dgen virtualenv (resolved via the
-MESHFORGE_HUNYUAN_PY / MESHFORGE_HUNYUAN_MODEL_ROOT env vars, falling back to
-the default install location; set MESHFORGE_HUNYUAN_AUTOSTART=0 to disable).
-Only when auto-start also fails does load() raise — mock-relief remains the
-working default for development.
+若服务不可达，`load` 会先用 hy3dgen 虚拟环境拉起自带的 `server/hunyuan_service.py`
+子进程（路径经 `MESHFORGE_HUNYUAN_PY` / `MESHFORGE_HUNYUAN_MODEL_ROOT` 解析，回退默认安装位；
+`MESHFORGE_HUNYUAN_AUTOSTART=0` 可关闭）。只有自动启动也失败才抛错——
+开发期 mock-relief 仍是可用默认。
+
+与 `server/jobs.py` 的协作：job 在 worker 线程内调用 `generate`，进度经 `progress`、
+取消经 `cancel` 传递；子进程的拉起与超时等待发生在 `load` 阶段，常驻服务不会被
+单次取消杀掉，但取消事件会中止当次推理请求。
 """
 
 import io
@@ -18,6 +19,7 @@ import os
 import subprocess
 import sys
 import threading
+from http import HTTPStatus
 import time
 import uuid
 from pathlib import Path
@@ -30,8 +32,8 @@ from .base import BaseGenerator, GenerationCancelled, ProgressFn
 
 def _service_url() -> str:
     import os
-    # Default matches server/hunyuan_service.py (--port 8767). Set
-    # MESHFORGE_HUNYUAN_URL to point at a different inference endpoint.
+    # 默认值与 server/hunyuan_service.py 对齐（--port 8767）。可通过
+    # MESHFORGE_HUNYUAN_URL 指向别的推理端点。
     return os.environ.get('MESHFORGE_HUNYUAN_URL', 'http://127.0.0.1:8767').rstrip('/')
 
 
@@ -61,15 +63,18 @@ def _multipart_post(url: str, image_path: Path, fields: dict) -> bytes:
         return resp.read()
 
 
-# ─── Local inference-service auto-start ──────────────────────────────────────
-# hunyuan_service.py must run inside the hy3dgen virtualenv — a different
-# interpreter than this server's. Instead of requiring a manual launch, load()
-# starts it as a child process when the health probe fails and a local install
-# is discoverable. The child is detached enough to outlive single jobs; its
-# stdout/stderr go to workspace/logs/hunyuan-service.log.
+# ─── 本地推理服务自动拉起 ─────────────────────────────────────────────────────
+# hunyuan_service.py 必须跑在 hy3dgen 虚拟环境里——与本服务端不是同一个解释器。
+# 与其要求手动启动，不如在健康检查失败时由 load() 作为子进程拉起（前提是能探测到
+# 本地安装）。子进程足够「独立」，可跨单次任务存活；其 stdout/stderr 写入
+# workspace/logs/hunyuan-service.log。
+
+# 仅 Windows 下探测这两个常见安装位（hy3dgen venv + 权重根目录）。
+# 根目录统一取自 config.SERVICES_ROOT（MESHFORGE_SERVICES_ROOT 可覆盖）。
+from config import SERVICES_ROOT
 
 _AUTOSTART_CANDIDATES = [
-    (r'D:\github\hy3dgen-venv\Scripts\python.exe', r'D:\github\models'),
+    (str(SERVICES_ROOT / 'hy3dgen-venv' / 'Scripts' / 'python.exe'), str(SERVICES_ROOT / 'models')),
     (r'C:\github\hy3dgen-venv\Scripts\python.exe', r'C:\github\models'),
 ]
 
@@ -80,7 +85,7 @@ _spawned_proc: Optional['subprocess.Popen'] = None
 def _probe(url: str) -> bool:
     try:
         with urlopen(f'{url}/health', timeout=3) as resp:  # noqa: S310
-            return resp.status == 200
+            return resp.status == HTTPStatus.OK
     except (URLError, HTTPError, OSError):
         return False
 
@@ -135,6 +140,7 @@ def _ensure_service(url: str, progress: Optional[ProgressFn]) -> bool:
         script = server_root / 'hunyuan_service.py'
         log_path = server_root / 'workspace' / 'logs' / 'hunyuan-service.log'
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        # Windows 下 CREATE_NO_WINDOW 避免推理服务弹出控制台黑窗；其它平台无此标志。
         creationflags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         with log_path.open('ab') as log:
             _spawned_proc = subprocess.Popen(
@@ -149,8 +155,8 @@ def _ensure_service(url: str, progress: Optional[ProgressFn]) -> bool:
                 creationflags=creationflags,
             )
 
-        # Wait for uvicorn to answer /health. The model keeps preloading in
-        # the background; /generate blocks on the pipeline until it is ready.
+        # 等待 uvicorn 应答 /health。模型仍在后台预热，
+        # /generate 会一直阻塞到管线就绪为止。
         deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
             if _probe(url):
@@ -162,6 +168,7 @@ def _ensure_service(url: str, progress: Optional[ProgressFn]) -> bool:
 
 
 class Hunyuan3DGenerator(BaseGenerator):
+    """Hunyuan3D-2-mini 生成器：单图 → 网格，经本地 HTTP 推理服务完成。"""
     id = 'hunyuan3d-2-mini'
     display_name = 'Hunyuan3D 2 mini (Real)'
     input_type = 'image'
@@ -215,6 +222,18 @@ class Hunyuan3DGenerator(BaseGenerator):
         progress: ProgressFn,
         cancel: threading.Event,
     ) -> Path:
+        """把输入图片 POST 给推理服务，接收返回的 GLB 并落盘。
+
+        Args:
+            image_path: 输入图片路径。
+            out_dir: `.glb` 输出目录。
+            params: 前端下发的采样步数/引导强度/重建分辨率/种子/去底座等参数。
+            progress: 进度回调（上传 / 接收 / 完成三段）。
+            cancel: 取消事件，上传前与接收前各轮询一次。
+
+        Returns:
+            生成的 `model.glb` 路径。
+        """
         if not self._loaded:
             self.load(progress)
 

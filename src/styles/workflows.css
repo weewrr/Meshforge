@@ -901,7 +901,14 @@
   gap: 7px;
   padding: 7px 10px;
   border-bottom: 1px solid var(--bg-hover);
-  border-top: 2px solid transparent;
+  /* Unreal Blueprint: colored accent band on top + tinted title, keyed to the
+     node's --node-color (set inline by NodeShell). */
+  border-top: 3px solid var(--node-color, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--node-color, #38bdf8) 16%, transparent),
+    transparent 70%
+  );
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
@@ -915,7 +922,7 @@
 .wf-node__title {
   flex: 1;
   font-weight: 600;
-  color: var(--text-bright2);
+  color: var(--node-color, var(--text-bright2));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1193,11 +1200,129 @@
   text-overflow: ellipsis;
 }
 
+/* 数组节点：可变数量图片槽 */
+.wf-array {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.wf-array__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-array__thumb {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-hover);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+}
+
+.wf-array__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wf-array__thumb--placeholder {
+  border-style: dashed;
+  font-size: 16px;
+}
+
+.wf-array__thumb:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.wf-array__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.wf-array__idx {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-family: monospace;
+}
+
+.wf-array__name {
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wf-array__remove {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+.wf-array__remove:hover {
+  background: var(--bg-hover);
+  color: #f87171;
+}
+
 .wf-handle {
   width: 9px !important;
   height: 9px !important;
   background: var(--accent) !important;
+  /* Socket ring: bumps the pin off the node edge and adds a faint halo so the
+     filled color reads like a Blueprint data pin. */
   border: 2px solid var(--bg-app) !important;
+  box-shadow: 0 0 0 1px var(--bg-app), 0 0 0 1.5px rgba(255, 255, 255, 0.22);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.wf-handle:hover,
+.wf-handle.connectingto {
+  transform: scale(1.45);
+  box-shadow: 0 0 0 1px var(--bg-app), 0 0 0 2px var(--accent), 0 0 10px var(--accent);
+  z-index: 2;
+}
+
+/* Unreal Blueprint exec pin: a solid white diamond at the top of flow nodes,
+   wired with white exec edges. Distinct from colored data pins. */
+.wf-handle--exec {
+  width: 9px !important;
+  height: 9px !important;
+  border-radius: 2px !important;
+  transform: rotate(45deg);
+  background: var(--exec-wire, #e8e9eb) !important;
+  border: 1px solid rgba(0, 0, 0, 0.35) !important;
+  box-shadow: 0 0 0 1px var(--bg-app);
+}
+.wf-handle--exec:hover {
+  transform: rotate(45deg) scale(1.4);
+}
+
+/* UE 选中橙色描边（替代默认青色）——一眼能认出当前选择的节点。 */
+.react-flow__node.selected .wf-node {
+  border-color: var(--bp-selection, #fa9b3f);
+  box-shadow: 0 0 0 1px var(--bp-selection, #fa9b3f), 0 4px 16px rgba(250, 155, 63, 0.22);
 }
 
 /* ─── Extensions panel ───────────────────────────────────────────────────── */
@@ -1426,7 +1551,7 @@
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   padding: 8px 10px;
   border: 0;
@@ -1436,6 +1561,23 @@
   font-size: 12px;
   text-align: left;
   cursor: pointer;
+}
+
+.wf-palette__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.wf-palette__group {
+  padding: 8px 10px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-placeholder);
+  text-transform: uppercase;
+  user-select: none;
 }
 
 .wf-palette__item:hover {
@@ -1450,6 +1592,7 @@
 .wf-palette__hint {
   font-size: 10px;
   color: var(--text-placeholder);
+  margin-left: auto;
 }
 
 .wf-palette__empty {
@@ -1567,7 +1710,18 @@
 .react-flow__controls-button {
   background: var(--bg-overlay);
   border-bottom: 1px solid var(--bg-hover);
-  fill: var(--text-muted);
+  /* 图标用 currentColor 而非 fill：React Flow 控件 SVG 默认取 currentColor，
+     fill 不会被继承，导致图标颜色跟随全局文字色而与背景叠成白块。 */
+  color: var(--text-muted);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+/* 深色主题：控件符号用高亮灰，确保与深色背景强对比（浅色走 --text-muted 已正常）。 */
+:root:not([data-theme='light']) .react-flow__controls-button {
+  color: #c7d2ea;
 }
 
 .react-flow__controls-button:hover {
@@ -1581,5 +1735,743 @@
 
 .react-flow__attribution a {
   color: var(--border-hover);
+}
+
+/* ─── Blueprint-style nodes (Comment box / Reroute point / Select) ────────── */
+
+/* Floating action to box the current selection into a Comment (top center). */
+.wf-comment-group {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+}
+
+.wf-comment-group__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  transition: all var(--ease);
+}
+
+.wf-comment-group__btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+/* Reroute point (pass-through jumper) — a small hollow dot with two pins. */
+.wf-reroute {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--bg-panel);
+  border: 2px solid var(--border-strong);
+}
+
+.wf-reroute::after {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: var(--text-quiet);
+}
+
+/* Comment box — large translucent frame with a colored heading bar.
+   `--wf-head-k` 由节点按当前 zoom 反向注入（1 / zoom，钳制 1~2.4），让标题栏在缩小时
+   仍保持屏幕上的可读尺寸；所有标题栏内部件尺寸都乘以它。 */
+.wf-comment {
+  --wf-head-k: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid;
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas);
+}
+
+.wf-comment--selected {
+  box-shadow: 0 0 0 2px var(--bg-selected);
+}
+
+.wf-comment__head {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--wf-head-k));
+  height: calc(26px * var(--wf-head-k));
+  padding: 0 calc(9px * var(--wf-head-k));
+  flex-shrink: 0;
+}
+
+.wf-comment__glyph {
+  width: calc(14px * var(--wf-head-k));
+  height: calc(14px * var(--wf-head-k));
+  flex: none;
+}
+
+.wf-comment__title {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: calc(12px * var(--wf-head-k));
+  font-weight: 600;
+  font-family: inherit;
+  outline: none;
+}
+
+.wf-comment__title::placeholder {
+  color: var(--text-faint);
+}
+
+.wf-comment__swatches {
+  display: flex;
+  gap: calc(4px * var(--wf-head-k));
+  flex-shrink: 0;
+}
+
+.wf-comment__swatch {
+  width: calc(13px * var(--wf-head-k));
+  height: calc(13px * var(--wf-head-k));
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.65;
+}
+
+.wf-comment__swatch:hover {
+  opacity: 1;
+}
+
+.wf-comment__swatch.is-on {
+  opacity: 1;
+  box-shadow: 0 0 0 2px var(--bg-canvas), 0 0 0 3px currentColor;
+}
+
+.wf-comment__collapse {
+  flex: none;
+  width: calc(18px * var(--wf-head-k));
+  height: calc(18px * var(--wf-head-k));
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: calc(11px * var(--wf-head-k));
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.wf-comment__collapse:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.wf-comment__body {
+  padding: 0 10px 10px;
+  color: var(--text-faint);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+/* 缩得较小时只保留标题：色板与说明文字收起，避免糊成一团。 */
+.wf-comment--zoomed-out .wf-comment__swatches,
+.wf-comment--zoomed-out .wf-comment__body {
+  display: none;
+}
+
+/* 缩得很小时连折叠按钮也收起，只剩标题与图标。 */
+.wf-comment--far-out .wf-comment__collapse {
+  display: none;
+}
+
+.wf-comment--collapsed .wf-comment__body {
+  display: none;
+}
+
+/* Select node — N left pins multiplexed to a single output. */
+.wf-select {
+  min-width: 160px;
+  background: var(--bg-panel);
+  border: 1px solid var(--bg-selected);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.wf-select__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+
+.wf-select .wf-hint {
+  margin: 0;
+}
+
+/* ─── Branch / Sequence exec-flow nodes ──────────────────────────────────── */
+.wf-branch,
+.wf-sequence {
+  min-width: 180px;
+  background: var(--bg-panel);
+  border: 1px solid var(--bg-selected);
+  border-radius: var(--radius-md);
+  overflow: visible;
+}
+
+.wf-flow__glyph {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--node-color, var(--text-bright2));
+}
+
+.wf-branch__labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  padding-top: 2px;
+  user-select: none;
+}
+
+/* 运算/计算节点（变量/判空/布尔/数值/比较/文本拼接/数据门） */
+.wf-compute {
+  min-width: 180px;
+  background: var(--bg-panel);
+  border: 1px solid var(--bg-selected);
+  border-radius: var(--radius-md);
+}
+.wf-compute .wf-node__header {
+  border-top-width: 3px;
+  border-top-style: solid;
+  border-top-color: var(--node-color, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--node-color, #38bdf8) 14%, transparent),
+    transparent 70%
+  );
+}
+.wf-compute .wf-node__title {
+  color: var(--node-color, var(--text-bright2));
+}
+
+/* 函数/子图折叠节点 */
+.wf-subgraph__title {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--node-color, var(--text-bright2));
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  outline: none;
+}
+.wf-subgraph__title::placeholder {
+  color: var(--text-faint);
+}
+
+/* ─── 子图编辑器视图（双击进入） ─────────────────────────────────────────── */
+.wf-subeditor {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+}
+
+.wf-subeditor__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+
+.wf-subeditor__crumb {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-bright2);
+}
+
+.wf-subeditor__canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.wf-subeditor__menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 50;
+  width: 260px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.wf-subeditor__menu .wf-palette__search {
+  margin: 8px;
+}
+
+.wf-subeditor__list {
+  overflow-y: auto;
+  padding: 0 6px 6px;
+}
+
+.wf-subeditor__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-light);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.wf-subeditor__item:hover {
+  background: var(--bg-panel-soft);
+  color: var(--text);
+}
+
+/* 子图输入挂点占位节点（可改名 / 改端口类型） */
+.wf-subinput,
+.wf-suboutput {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 120px;
+  padding: 4px 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--bg-selected);
+  border-top: 3px solid var(--node-color, var(--bg-selected));
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  color: var(--text-soft);
+}
+.wf-suboutput {
+  border-style: dashed;
+  border-top-style: solid;
+  min-width: 130px;
+}
+.wf-subinput__glyph,
+.wf-suboutput__glyph {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 2px;
+}
+.wf-subinput__name,
+.wf-suboutput__name {
+  width: 62px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-bright2);
+  font-size: 10px;
+  font-family: inherit;
+  font-weight: 600;
+  outline: none;
+  padding: 0;
+}
+.wf-subinput__type,
+.wf-suboutput__type {
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  background: var(--bg-overlay);
+  color: var(--text-soft);
+  font-size: 9px;
+  font-family: inherit;
+  padding: 0 2px;
+  outline: none;
+}
+
+/* 函数实例引脚名（UE 函数调用节点上的引脚标签） */
+.wf-pin-label {
+  position: absolute;
+  transform: translateY(-50%);
+  font-size: 9px;
+  line-height: 1;
+  color: var(--text-faint);
+  pointer-events: none;
+  max-width: 66px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-pin-label--in {
+  left: 12px;
+}
+.wf-pin-label--out {
+  right: 12px;
+}
+
+/* 共享函数体标记（多实例引用） */
+.wf-subgraph__shared {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+  opacity: 0.85;
+  flex: none;
+}
+
+/* 循环节点的迭代进度 */
+.wf-iter {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--node-color, #38bdf8) 22%, transparent);
+  color: var(--text-bright2);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.4px;
+}
+
+/* 子图编辑器面包屑 */
+.wf-subeditor__crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+.wf-crumb__group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.wf-crumb {
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.wf-crumb:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.wf-crumb__sep {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.wf-crumb__input {
+  width: 150px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-bright2);
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  padding: 2px 5px;
+  outline: none;
+}
+.wf-crumb__input:hover,
+.wf-crumb__input:focus {
+  border-color: var(--border-soft);
+  background: var(--bg-overlay);
+}
+.wf-subeditor__meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* 面板里的函数库（My Blueprint）条目 */
+.wf-tile--fn {
+  cursor: default;
+  gap: 5px;
+}
+.wf-tile--fn .wf-tile__label {
+  flex: 1;
+  min-width: 0;
+}
+.wf-tile__badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--accent);
+  flex: none;
+}
+.wf-tile__mini {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  background: var(--bg-overlay);
+  color: var(--text-soft);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.wf-tile__mini:hover {
+  border-color: var(--accent);
+  color: var(--text-bright);
+}
+.wf-panel__empty {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* ─── 运行态视觉：exec 连线流动 + 节点脉冲 ─────────────────────────────────── */
+@keyframes wf-exec-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.react-flow__edge-path.wf-edge--exec-flow {
+  stroke-dasharray: 7 10;
+  animation: wf-exec-flow 0.85s linear infinite;
+}
+
+@keyframes wf-node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35), 0 2px 12px rgba(34, 211, 238, 0.12);
+  }
+  50% {
+    box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.8), 0 2px 20px rgba(34, 211, 238, 0.4);
+  }
+}
+.wf-node.wf-node--running {
+  animation: wf-node-pulse 1.5s ease-in-out infinite;
+}
+
+/* ─── Blueprint 参数引脚（模型参数可作为引脚输入）────────────────────────────── */
+.wf-param {
+  position: relative;
+}
+
+/* 参数引脚比数据引脚更小巧（左侧，与参数行对齐）。 */
+.wf-handle--param {
+  width: 7px !important;
+  height: 7px !important;
+}
+
+/* ─── Blueprint exec 连线 / 选中色（主题自适应）──────────────────────────────── */
+.wf-canvas {
+  --exec-wire: #e3e5ea; /* UE 执行线的近白（暗色画布上清晰可见） */
+  --bp-selection: #fa9b3f; /* UE 选中橙 */
+}
+:root[data-theme='light'] .wf-canvas {
+  --exec-wire: #5b6b83; /* 浅色画布上用深蓝灰，保证可见 */
+}
+
+/* ─── Node 右键 Context Sensitive Actions 菜单 ──────────────────────────────── */
+.wf-node-menu {
+  position: fixed;
+  z-index: 310;
+  min-width: 190px;
+  padding: 4px;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+}
+
+.wf-node-menu__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-light);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.wf-node-menu__item svg {
+  flex: none;
+  opacity: 0.8;
+}
+.wf-node-menu__item:hover {
+  background: var(--bg-panel-soft);
+  color: var(--text);
+}
+
+.wf-node-menu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--bg-hover);
+}
+
+/* ─── 断点标记（调试）─────────────────────────────────────────────────────────── */
+.wf-bp-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 6px rgba(239, 68, 68, 0.8);
+}
+
+/* ─── 引脚右键菜单（断开单条连线）────────────────────────────────────────────── */
+.wf-pin-menu {
+  position: fixed;
+  z-index: 320;
+  min-width: 210px;
+  max-width: 250px;
+  padding: 4px;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+}
+.wf-pin-menu__title {
+  padding: 6px 8px 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.wf-pin-menu__empty {
+  padding: 4px 8px 8px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-faint);
+}
+.wf-pin-menu__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-light);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.wf-pin-menu__item:hover {
+  background: var(--bg-panel-soft);
+  color: var(--text);
+}
+.wf-pin-menu__dir {
+  flex: none;
+  color: var(--accent);
+  font-size: 11px;
+}
+.wf-pin-menu__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-pin-menu__x {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+.wf-pin-menu__item:hover .wf-pin-menu__x {
+  color: var(--danger-bright);
+}
+.wf-pin-menu__item--danger {
+  color: var(--danger-bright);
+}
+.wf-pin-menu__item--danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+.wf-pin-menu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--bg-hover);
+}
+
+/* ─── 连线悬停预览：拖拽连线时高亮所有可连接引脚 ─────────────────────────────── */
+/* React Flow 在拖拽期间会给引脚加 connectionindicator（可作为端点）、
+   connectingfrom（起点）、connectingto（光标下）与 valid（合法落点）等类名，
+   我们用画布上的 data-connecting 属性把高亮限定在"正在连线"这一瞬间。 */
+@keyframes wf-pin-ready {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--bg-app), 0 0 0 2px rgba(148, 163, 184, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--bg-app), 0 0 0 3px rgba(148, 163, 184, 0.9);
+  }
+}
+[data-connecting='1'] .react-flow__handle.connectionindicator {
+  transform: scale(1.5);
+  animation: wf-pin-ready 1.1s ease-in-out infinite;
+  z-index: 3;
+}
+/* 起手引脚：亮青环，说明这条线从这里出发。 */
+[data-connecting='1'] .react-flow__handle.connectingfrom {
+  transform: scale(1.7);
+  animation: none;
+  box-shadow: 0 0 0 1px var(--bg-app), 0 0 0 3px var(--accent), 0 0 12px var(--accent);
+  z-index: 4;
+}
+/* 光标落点：合法 → 翡翠绿；非法 → 红。 */
+[data-connecting='1'] .react-flow__handle.connectingto.valid {
+  transform: scale(1.8);
+  animation: none;
+  box-shadow: 0 0 0 1px var(--bg-app), 0 0 0 3px #34d399, 0 0 14px #34d399;
+  z-index: 4;
+}
+[data-connecting='1'] .react-flow__handle.connectingto:not(.valid) {
+  transform: scale(1.6);
+  animation: none;
+  box-shadow: 0 0 0 1px var(--bg-app), 0 0 0 3px #ef4444, 0 0 12px rgba(239, 68, 68, 0.7);
+  z-index: 4;
+}
+/* exec 引脚是旋转 45° 的白色菱形，放大时必须带上 rotate。选择器用 .wf-handle--exec
+   而非 .react-flow__handle--exec——React Flow 给 Handle 元素的基类是 react-flow__handle，
+   我们的 className 被追加进去，实际元素上没有 react-flow__handle--exec 这个类。 */
+[data-connecting='1'] .wf-handle--exec.connectionindicator,
+[data-connecting='1'] .wf-handle--exec.connectingfrom,
+[data-connecting='1'] .wf-handle--exec.connectingto {
+  transform: rotate(45deg) scale(1.6);
 }
 

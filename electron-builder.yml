@@ -23,10 +23,12 @@ extraResources:
       - "!.venv/**"
       - "!workspace/**"
       - "!models/**"
-  - from: scripts/setup-hunyuan-server.bat
-    to: scripts/setup-hunyuan-server.bat
-  - from: scripts/start-hunyuan-server.bat
-    to: scripts/start-hunyuan-server.bat
+  - from: scripts
+    to: scripts
+    filter:
+      # 随包携带全部模型服务的 setup/start 脚本（文档 3.1 第 5 条：
+      # 此前只打包了 Hunyuan 的两个脚本，其余模型服务启动资源缺失）。
+      - "*.bat"
 
 win:
   target:

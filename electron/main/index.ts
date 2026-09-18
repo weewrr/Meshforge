@@ -1,16 +1,25 @@
+/**
+ * Electron 主进程入口。
+ *
+ * 负责窗口生命周期（无边框主窗口、单实例锁）、崩溃恢复（渲染进程异常退出后
+ * 自动重载，并把原因暂存给前端展示）、Python 后端子进程的拉起与退出清理，
+ * 以及 IPC 通道注册（原生对话框、文件路径、系统信息、窗口控制）。
+ */
+
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { startPythonBackend, stopPythonBackend } from './python-bridge'
+import { API_TOKEN, getApiPort, startPythonBackend, stopPythonBackend } from './python-bridge'
+import { clearSecrets, getSecret, setSecret } from './secret-store'
 
-// VM / remote-desktop hosts often ship broken GPU drivers that freeze the
-// renderer's compositor (renderer becomes unresponsive, WebGL context lost).
-// SwiftShader fallback keeps the app stable on such machines.
+// 虚拟机 / 远程桌面宿主的 GPU 驱动常有缺陷，会冻住渲染进程的合成器
+// （渲染进程无响应、WebGL 上下文丢失）。回退到 SwiftShader 可让应用
+// 在这类机器上保持稳定。
 app.disableHardwareAcceleration()
-// On this machine the Chromium sandbox broker breaks child-process startup:
-// GPU process exits with code 1, the network service fails, and every
-// navigation (even data: URLs) rejects with ERR_FAILED (-2).
+// 在本机上 Chromium 沙箱 broker 会破坏子进程启动：GPU 进程以退出码 1
+// 退出、网络服务失败，且一切导航（连 data: URL 也一样）都以
+// ERR_FAILED (-2) 被拒绝。
 // --no-sandbox is the only reliable workaround here; contextIsolation stays on.
 app.commandLine.appendSwitch('no-sandbox')
 app.commandLine.appendSwitch('disable-gpu')
@@ -18,11 +27,11 @@ app.commandLine.appendSwitch('disable-gpu-sandbox')
 
 let mainWindow: BrowserWindow | null = null
 
-// Set right before any crash-driven reload; the freshly loaded renderer asks
-// for it via `fs:getLastCrash` (one-shot) and shows a "recovered" banner, so a
-// crash is never a silent jump back to the default page.
+// 在每次"因崩溃触发重载"之前写入；重载后的渲染进程通过一次性 IPC
+// `fs:getLastCrash` 读取它并显示"已恢复"横幅，使崩溃不会再被静默地跳回默认页面。
 let lastCrash: { reason: string; at: number } | null = null
 
+// 记录崩溃原因与时间戳，供重载后的渲染进程读取并展示恢复横幅。
 function markCrash(reason: string): void {
   lastCrash = { reason, at: Date.now() }
   console.error(`[main] markCrash: ${reason}`)
@@ -44,9 +53,16 @@ async function createWindow(): Promise<void> {
     }
   })
 
+  // 外链协议白名单（文档 13.5）：只放行 https 链接到系统默认浏览器，
+  // 防止 file:// / 自定义协议处理器被恶意页面借 shell.openExternal 触发。
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    if (url.startsWith('https://')) void shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  // 同时约束本窗口导航：仅允许 https 外链跳系统浏览器，其余拒绝。
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('https://')) event.preventDefault()
   })
 
   mainWindow.webContents.on('console-message', (_e, _level, message) => {
@@ -54,12 +70,12 @@ async function createWindow(): Promise<void> {
   })
 
   // ── Renderer crash / hang recovery ─────────────────────────────────────
-  // The window is frameless (`frame: false`) and its title bar is drawn by
-  // React: if the renderer process dies or its main thread freezes (broken
-  // GPU drivers / WebGL crashes are the usual cause on this machine), the
-  // min/max/close buttons vanish with it and the window looks "stuck" —
-  // close and minimize appear dead. Recovery must come from the main
-  // process, which stays alive independently of the renderer.
+  // 窗口无边框（`frame: false`），标题栏由 React 绘制：如果渲染进程死掉
+  // 或主线程卡死（本机常见原因是 GPU 驱动异常 / WebGL 崩溃），
+  // 最小化/最大化/关闭按钮会随之消失，窗口看起来"卡死"，
+  // 关闭与最小化像是失灵。恢复必须由主进程完成——
+  // 主进程独立于渲染进程存活，可以替用户收掉窗口；
+  // 不要把这类兜底逻辑放进渲染进程。
   let crashCount = 0
   let crashWindowStart = 0
   const CRASH_BUCKET_MS = 30_000
@@ -74,7 +90,7 @@ async function createWindow(): Promise<void> {
     }
     crashCount++
     if (crashCount > MAX_AUTO_RELOADS && !process.env.MF_NO_CRASH_DIALOG) {
-      // Stop auto-reloading — it would just crash again; let the user decide.
+      // 停止自动重载——重载只会再次崩溃；交给用户决定。
       const win = mainWindow
       const options: Electron.MessageBoxOptions = {
         type: 'error',
@@ -99,10 +115,10 @@ async function createWindow(): Promise<void> {
       })
       return
     }
-    // Auto-recover: a reload clears in-memory state, so the 3D viewer will
-    // not remount a crashing model automatically.
-    // MF_NO_CRASH_DIALOG=1 (automated/e2e runs): keep the auto-reload loop
-    // going without blocking on a message box, so each crash is logged.
+    // 自动恢复：重载会清空内存状态，因此 3D 查看器不会自动重新挂载
+    // 那个会让它崩溃的模型。
+    // MF_NO_CRASH_DIALOG=1（自动化/e2e 运行）：继续自动重载循环，
+    // 不被弹窗阻塞，让每次崩溃都被记录下来。
     markCrash(`renderer crash (${details.reason}, exit ${details.exitCode})`)
     if (process.env.MF_NO_CRASH_DIALOG) {
       crashWindowStart = Date.now()
@@ -129,7 +145,7 @@ async function createWindow(): Promise<void> {
         markCrash('renderer hang (unresponsive) — reloaded from recovery dialog')
         mainWindow?.webContents.reload()
       } else if (response === 2) mainWindow?.close()
-      // response === 1 (Wait): do nothing; 'responsive' may fire later.
+      // response === 1（等待）：什么都不做；后续可能触发 'responsive' 事件。
     })
   })
 
@@ -149,10 +165,9 @@ ipcMain.handle('win:max', () => {
 })
 ipcMain.handle('win:close', () => mainWindow?.close())
 
-// Native file dialogs (Modly-aligned). Opening a Chromium <input type=file>
-// inside the renderer is documented to freeze this machine's renderer main
-// thread, so mesh imports go through the main process instead: it returns a
-// filesystem path and the backend serves the file directly.
+// 原生文件对话框（与 Modly 对齐）。在本机环境下，渲染进程内打开 Chromium 的
+// <input type=file> 会让渲染主线程冻结，因此网格导入改由主进程承接：主进程返回
+// 文件系统路径，由后端直接提供该文件的访问。
 ipcMain.handle('fs:selectMeshFile', async (): Promise<string | null> => {
   const win = mainWindow
   if (!win) return null
@@ -178,9 +193,9 @@ ipcMain.handle('fs:selectImageFile', async (): Promise<string | null> => {
   return result.canceled ? null : (result.filePaths[0] ?? null)
 })
 
-// Workflow JSON import — reads the file in the main process because the
-// sandboxed renderer has no fs access (and <input type=file> freezes this
-// machine's renderer).
+// 工作流 JSON 导入——在主进程读取文件，因为沙箱化的渲染进程
+// 没有文件系统权限，且 <input type=file> 会冻住这台机器的渲染进程
+//（渲染进程最终只拿得到解析后的 JSON 文本）。
 ipcMain.handle('fs:selectWorkflowFile', async (): Promise<{ name: string; content: string } | null> => {
   const win = mainWindow
   if (!win) return null
@@ -200,11 +215,10 @@ ipcMain.handle('fs:selectWorkflowFile', async (): Promise<{ name: string; conten
   }
 })
 
-// Extension source-folder picker. The Extensions page's "Link local folder"
-// used a webkitdirectory <input type=file> in the renderer, which freezes /
-// crashes this machine's renderer (same root cause as the mesh/image pickers
-// above). The main process returns the directory path and the backend copies
-// the tree server-side — the renderer never touches the files.
+// 扩展源文件夹选择器。扩展页的"链接本地文件夹"原本在渲染进程里用
+// webkitdirectory 的 <input type=file>，会冻结 / 崩溃本机渲染进程（与上面的
+// 网格/图片选择器同源）。主进程返回目录路径，由后端在服务端复制整棵目录树——
+// 渲染进程全程不接触这些文件。
 ipcMain.handle('fs:selectFolder', async (): Promise<string | null> => {
   const win = mainWindow
   if (!win) return null
@@ -216,9 +230,9 @@ ipcMain.handle('fs:selectFolder', async (): Promise<string | null> => {
   return result.canceled ? null : (result.filePaths[0] ?? null)
 })
 
-// One-shot: the renderer calls this right after a crash-driven reload to learn
-// why it was reloaded (for the recovery banner / log). Clears on read so the
-// banner only shows once per crash.
+// 一次性：渲染进程在崩溃触发的重载后立刻调用本接口，以获知
+// 这次为什么被重载（供恢复横幅 / 日志使用）。读取即清空，
+// 因此横幅在每次崩溃后只会显示一次。
 ipcMain.handle('fs:getLastCrash', async (): Promise<{ reason: string; at: number } | null> => {
   const crash = lastCrash
   lastCrash = null
@@ -231,9 +245,29 @@ ipcMain.handle('sys:ram', () => {
   return { total, free, percent: Math.round(((total - free) / total) * 100) }
 })
 
+// 本地 API token：渲染层经 apiFetch 给每个请求附加 Authorization 头。
+// token 只经受控 IPC 传递，不出现在 URL / localStorage / 日志里（文档 3.2 / 13.3）。
+ipcMain.handle('fs:getApiToken', () => API_TOKEN)
+
+// 本地 API 端口：后端启动时从 8766 起自动选空闲端口，渲染层在首帧前
+// 经此 IPC 取到实际端口并配置 API_BASE（文档 12.3 动态端口）。
+ipcMain.handle('api:getInfo', () => ({ port: getApiPort() }))
+
+// 凭据安全存取（文档 13.3）：HF Token / Agent API Key 由主进程经 safeStorage
+// 加密落盘，渲染层不再把它们放进 localStorage。键名白名单在 secret-store 内校验。
+ipcMain.handle('secrets:get', (_e, key: string) => getSecret(key))
+ipcMain.handle('secrets:set', (_e, key: string, value: string) => setSecret(key, String(value ?? '')))
+ipcMain.handle('secrets:clear', () => clearSecrets())
+
 app.whenReady().then(async () => {
-  // Local API must never go through the user's system proxy.
+  // 本地 API 绝不能走用户的系统代理。
   await session.defaultSession.setProxy({ mode: 'direct' })
+
+  // 权限默认拒绝（文档 13.5）：应用未声明任何浏览器权限需求，
+  // 未声明的权限请求（通知/定位/摄像头等）一律拒绝，收敛渲染层被利用后的影响面。
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => {
+    callback(false)
+  })
 
   await startPythonBackend()
   await createWindow()
@@ -243,11 +277,13 @@ app.whenReady().then(async () => {
   })
 })
 
+// 窗口全部关闭（macOS 除外）或应用即将退出时，停掉 Python 后端子进程，释放端口。
 app.on('window-all-closed', () => {
   stopPythonBackend()
   if (process.platform !== 'darwin') app.quit()
 })
 
+// 退出前兜底再清理一次后端进程，避免极端情况下子进程残留。
 app.on('before-quit', () => {
   stopPythonBackend()
 })

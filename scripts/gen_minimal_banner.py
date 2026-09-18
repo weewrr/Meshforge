@@ -1,12 +1,11 @@
 """
-Generate the English-README banner (assets/banners/minimal-type-1600x400.svg).
+生成英文版 README 横幅（assets/banners/minimal-type-1600x400.svg）。
 
-Minimal, typography-first composition: centered wordmark with a gradient
-accent, a thin rule, tagline and tech stack. Two small wireframe triangles
-flank the wordmark as a nod to the mesh pipeline. Self-contained SVG that
-adapts to GitHub light/dark via `prefers-color-scheme: dark`.
+极简、排版优先的构图：居中的文字标识 + 渐变强调色，一条细分割线、标语与技术栈。
+文字标识两侧各放一个细线三角框，呼应网格管线。SVG 自包含，通过
+`prefers-color-scheme: dark` 适配 GitHub 的浅色 / 深色主题。
 
-Run:  python scripts/gen_minimal_banner.py
+运行：  python scripts/gen_minimal_banner.py
 """
 
 import math
@@ -17,31 +16,50 @@ CX = W / 2.0
 CY = 200.0
 TR = 46.0  # decorative triangle radius
 
+# 输出目录：脚本所在目录的上一级 assets/banners（normpath 统一分隔符）。
 OUT_DIR = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "banners")
 )
 
 
 def f(v):
+    """把数值格式化为紧凑字符串：保留 1 位小数，整数则去掉尾部的 ".0"。
+
+    用于 SVG 坐标——`123.0` 会被精简成 `123`，让生成的 SVG 更短也可读。
+    """
     s = f"{v:.1f}"
     return s[:-2] if s.endswith(".0") else s
 
 
 def tri_points(cx, cy, r, rot=0.0):
+    """算出一个等边三角形的三个顶点（外接圆圆心 + 半径 + 旋转角）。
+
+    Args:
+        cx, cy: 外接圆圆心。
+        r: 外接圆半径。
+        rot: 额外旋转角度（度）。
+
+    Returns:
+        三个 (x, y) 顶点，按绕圆顺序排列。
+    """
     pts = []
     for k in range(3):
+        # 从正上方（90°）起算，每 120° 取一个顶点；y 取负号是因为 SVG 的 y 轴朝下。
         a = math.radians(rot + 90 + k * 120)
         pts.append((cx + r * math.cos(a), cy - r * math.sin(a)))
     return pts
 
 
 def tri_path(cx, cy, r, rot=0.0):
+    """把三角形顶点拼成 SVG path 的 `d` 属性（M…L…L…Z 闭合）。"""
     pts = tri_points(cx, cy, r, rot)
     d = "M" + "L".join(f"{f(x)} {f(y)}" for x, y in pts) + "Z"
     return d
 
 
-# Plain string template with __TOKENS__ (kept consistent with gen_banner.py).
+# 纯字符串模板 + __TOKENS__ 占位符（与 gen_banner.py 保持一致）。
+# 纯字符串模板，用 __TOKENS__ 占位（与 gen_banner.py 的约定保持一致）。
+# 注意：模板内部的 CSS/XML 注释属于字符串内容，不是 Python 注释。
 TEMPLATE = r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 __W__ __H__" width="__W__" height="__H__"
      role="img" aria-label="MeshForge - local image to 3D mesh generation">
   <title>MeshForge - image to 3D mesh, forged locally</title>
@@ -118,6 +136,11 @@ TEMPLATE = r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 __W__ __H__"
 
 
 def build():
+    """把模板里的 __TOKENS__ 全部替换成实际几何值，返回完整 SVG 文本。
+
+    三角框水平镜像布置在文字标识两侧（±640），外侧实线 + 内侧虚线小三角
+    形成层次感；虚线用 `stroke-dasharray` 表达。
+    """
     subs = {
         "__W__": f(W),
         "__H__": f(H),
@@ -129,6 +152,7 @@ def build():
         "__TRI_R__": tri_path(CX + 640, CY, TR, rot=-14),
         "__TRI_LI__": tri_path(CX - 640, CY, TR * 0.62, rot=14),
         "__TRI_RI__": tri_path(CX + 640, CY, TR * 0.62, rot=-14),
+        # pill / 分割线按自身宽度居中：252/2=126，220/2=110。
         "__PILLX__": f(CX - 126),
         "__RULEX__": f(CX - 110),
     }
@@ -139,6 +163,7 @@ def build():
 
 
 def main():
+    """入口：生成极简横幅 SVG 并写出到 assets/banners/minimal-type-1600x400.svg。"""
     os.makedirs(OUT_DIR, exist_ok=True)
     out = os.path.join(OUT_DIR, "minimal-type-1600x400.svg")
     with open(out, "w", encoding="utf-8") as fp:

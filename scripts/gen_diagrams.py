@@ -1,16 +1,16 @@
 """
-Generate the MeshForge README diagrams (assets/diagrams/*.svg).
+生成 MeshForge README 插图（assets/diagrams/*.svg）。
 
-All diagrams are theme-aware: a single embedded <style> block holds a light
-palette by default and swaps to a dark one under `prefers-color-scheme: dark`,
-so they read correctly on GitHub in either theme. Backgrounds are left
-transparent so the diagrams blend into the page.
+所有插图都支持主题自适应：单个内联 <style> 块默认使用浅色配色，并在
+`prefers-color-scheme: dark` 下切换为深色，因此在 GitHub 的两种主题里都清晰可读。
+背景保持透明，让插图自然融入页面。
 
-Run:  python scripts/gen_diagrams.py
+运行：  python scripts/gen_diagrams.py
 """
 
 import os
 
+# 输出目录固定在仓库的 assets/diagrams 下（相对本脚本位置解析，避免依赖 cwd）。
 OUT_DIR = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "diagrams")
 )
@@ -18,7 +18,8 @@ OUT_DIR = os.path.normpath(
 SANS = "'Segoe UI','Helvetica Neue',Inter,Arial,sans-serif"
 MONO = "'JetBrains Mono','SF Mono',Consolas,Menlo,monospace"
 
-# Node specs mirrored from src/types.ts (NODE_SPECS)
+# 节点规格，与 src/types.ts 的 NODE_SPECS 保持一致（改一处须同步另一处）。
+# 每项：显示名 · 主题色 · 输入端口类型 · 输出端口类型 · 副标题
 NODES = [
     ("Image",         "#38bdf8", [],       "image", "Pick the source photo"),
     ("Text",          "#fbbf24", [],       "text",  "Prompt or extra parameters"),
@@ -31,9 +32,12 @@ NODES = [
     ("For Each",      "#38bdf8", ["any"],  "any",   "Iterate over a list"),
 ]
 
+# 端口类型 → 配色。`any` / `none` 用中性灰，避免与具体类型抢视觉重心。
 PORT_COLOR = {"image": "#38bdf8", "text": "#fbbf24", "mesh": "#a78bfa", "any": "#8b93a7",
               "none": "#8b93a7"}
 
+# 主题样式：默认浅色，prefers-color-scheme: dark 时切换为深色；
+# 字体名用 __SANS__ / __MONO__ 占位符，在字符串末尾统一替换（见下方 .replace）。
 STYLE = r'''  <style>
     .t1   { fill: #0d1526; }
     .t2   { fill: #4a5768; }
@@ -66,15 +70,31 @@ STYLE = r'''  <style>
 
 
 def f(v):
+    """把数值格式化为字符串并去掉多余的 ".0"（用于 SVG 坐标，例如 123.0 变成 123）。"""
     s = f"{v:.1f}"
     return s[:-2] if s.endswith(".0") else s
 
 
 def esc(s):
+    """转义 XML 特殊字符，防止标题/描述里的 `&`、`<`、`>` 破坏 SVG 结构。"""
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def wrap(title, desc, w, h, body, defs=""):
+    """把正文片段包进带样式的完整 SVG 骨架。
+
+    Args:
+        title: 可访问性标题，写入 aria-label / `<title>`。
+        desc: 更长的描述，写入 `<desc>`（屏幕阅读器与鼠标悬浮提示）。
+        w: 画布宽。
+        h: 画布高。
+        body: 已生成的 SVG 元素字符串，作为根节点的内容。
+        defs: 额外注入 `<defs>` 的内容（各插图自定义渐变/裁剪时用）。
+
+    Returns:
+        完整 SVG 文本。
+    """
+    # 所有插图共用同一套渐变（#gw）与箭头 marker（#arw），保证视觉一致。
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {f(w)} {f(h)}" width="{f(w)}" height="{f(h)}"
      role="img" aria-label="{esc(title)}">
   <title>{esc(title)}</title>
@@ -97,41 +117,46 @@ def wrap(title, desc, w, h, body, defs=""):
 
 
 def tag(x, y, text, size=12, color="t2"):
+    """绘制一段等宽字体的标签文本（带 esc 转义）。"""
     return f'<text x="{f(x)}" y="{f(y)}" class="mono {color}" font-size="{size}">{esc(text)}</text>'
 
 
 # --------------------------------------------------------------------------- #
-# 1. Node palette
+# 1. 节点面板
 # --------------------------------------------------------------------------- #
 
 def node_palette():
+    """插图 1：九种内置节点类型及其端口类型。"""
     cw, ch, gap = 440, 118, 20
     cols, rows = 3, 3
     x0, y0 = 40, 40
+    # 画布尺寸由 3×3 网格 + 四周/项间留白推得，改行列数时尺寸自动跟随。
     w = x0 * 2 + cw * cols + gap * (cols - 1)
     h = y0 * 2 + ch * rows + gap * (rows - 1)
 
     out = []
     for i, (label, color, inputs, output, hint) in enumerate(NODES):
+        # 按行优先顺序摆位：i % cols 定列、i // cols 定行。
         cx = x0 + (i % cols) * (cw + gap)
         cy = y0 + (i // cols) * (ch + gap)
 
         out.append(
             f'  <rect x="{f(cx)}" y="{f(cy)}" width="{cw}" height="{ch}" rx="12" class="card"/>'
         )
-        # colour swatch + name
+        # 颜色样本方块 + 节点名称
         out.append(f'  <rect x="{f(cx + 20)}" y="{f(cy + 24)}" width="12" height="12" rx="3" fill="{color}"/>')
         out.append(
             f'  <text x="{f(cx + 44)}" y="{f(cy + 36)}" class="sans t1" font-size="19" font-weight="600">{esc(label)}</text>'
         )
         out.append(f'  <text x="{f(cx + 20)}" y="{f(cy + 62)}" class="sans t3" font-size="14">{esc(hint)}</text>')
 
-        # port pills
+        # 输入端口药丸
         px = cx + 20
         py = cy + 78
         if inputs:
             for p in inputs:
                 pc = PORT_COLOR[p]
+                # 药丸宽度随文字长度自适应：每字符约 8px，再留 22px 内边距。
                 pw = len(p) * 8 + 22
                 out.append(
                     f'  <rect x="{f(px)}" y="{f(py)}" width="{pw}" height="24" rx="12" fill="none" '
@@ -142,7 +167,7 @@ def node_palette():
                     f'font-size="11.5" fill="{pc}">{esc(p)}</text>'
                 )
                 px += pw + 8
-            # arrow between in and out (only when both are present)
+            # 输入与输出之间画箭头（仅当两边都有端口时）
             if output and output != "none":
                 out.append(
                     f'  <path d="M{f(px + 2)} {f(py + 12)}h14" class="ln a" marker-end="url(#arw)"/>'
@@ -151,6 +176,7 @@ def node_palette():
         if output and output != "none":
             pc = PORT_COLOR[output]
             pw = len(output) * 8 + 22
+            # 输出端口用实心底 + 更低透明度，与输入的描边样式区分开。
             out.append(
                 f'  <rect x="{f(px)}" y="{f(py)}" width="{pw}" height="24" rx="12" fill="{pc}" fill-opacity="0.14" '
                 f'stroke="{pc}" stroke-opacity="0.55"/>'
@@ -169,9 +195,10 @@ def node_palette():
 
 
 # --------------------------------------------------------------------------- #
-# 2. Pipeline
+# 2. 生成流水线
 # --------------------------------------------------------------------------- #
 
+# 流水线各步：标题 · 副标题 · 主题色 · 图标种类（供 _glyph 分派）
 PIPELINE = [
     ("Image", "drop in a photo", "#38bdf8", "img"),
     ("Text", "optional prompt", "#fbbf24", "txt"),
@@ -182,8 +209,10 @@ PIPELINE = [
 
 
 def _glyph(kind, cx, cy, color):
-    """Small 32x32 icon centred on (cx, cy)."""
+    """以 (cx, cy) 为中心的 32×32 线框图标。"""
+    # 统一缩放系数，让图标视觉大小与卡片留白协调。
     s = 0.72
+    # 各图标的路径骨架（本函数的查表表；实际绘制写在下面按 kind 分支里）
     g = {
         "img": 'M4 7h24v18H4z' ,
         "txt": '',
@@ -192,6 +221,7 @@ def _glyph(kind, cx, cy, color):
         "down": '',
     }
     if kind == "img":
+        # 相框 + 太阳 + 山峦折线
         return (
             f'<g transform="translate({f(cx - 16)} {f(cy - 16)}) scale({s})">'
             f'<rect x="4" y="7" width="24" height="18" rx="3" fill="none" stroke="{color}" stroke-width="2.4"/>'
@@ -200,12 +230,14 @@ def _glyph(kind, cx, cy, color):
             f'stroke-linecap="round" stroke-linejoin="round"/></g>'
         )
     if kind == "txt":
+        # 大写字母 T，代表 Prompt/文本
         return (
             f'<g transform="translate({f(cx - 16)} {f(cy - 16)}) scale({s})">'
             f'<path d="M6 8h20M16 8v20" fill="none" stroke="{color}" stroke-width="2.6" stroke-linecap="round"/>'
             f'<path d="M10 24h12" fill="none" stroke="{color}" stroke-width="2.2" stroke-linecap="round"/></g>'
         )
     if kind == "gear":
+        # 齿轮：中心圆 + 八根辐条（对角两根为斜线）
         return (
             f'<g transform="translate({f(cx - 16)} {f(cy - 16)}) scale({s})">'
             f'<circle cx="16" cy="16" r="4.6" fill="none" stroke="{color}" stroke-width="2.4"/>'
@@ -214,12 +246,14 @@ def _glyph(kind, cx, cy, color):
             f'stroke-linecap="round"/></g>'
         )
     if kind == "grid":
+        # 等轴测立方体，代表 3D 视口
         return (
             f'<g transform="translate({f(cx - 16)} {f(cy - 16)}) scale({s})">'
             f'<path d="M16 4l11 6.5v11L16 28 5 21.5v-11z" fill="none" stroke="{color}" stroke-width="2.3"/>'
             f'<path d="M5 10.5L16 17l11-6.5M16 17v11" fill="none" stroke="{color}" stroke-width="2" '
             f'stroke-linecap="round" stroke-linejoin="round"/></g>'
         )
+    # 兜底：向下箭头 + 底横线，代表导出/下载
     return (
         f'<g transform="translate({f(cx - 16)} {f(cy - 16)}) scale({s})">'
         f'<path d="M16 5v16" fill="none" stroke="{color}" stroke-width="2.4" stroke-linecap="round"/>'
@@ -230,9 +264,11 @@ def _glyph(kind, cx, cy, color):
 
 
 def pipeline():
+    """插图 2：一次完整的生成流水线（Image → … → Export）。"""
     cw, ch, gap = 262, 148, 52
     n = len(PIPELINE)
     x0, y0 = 46, 70
+    # 高度固定 300（下方留白用于容纳标题与投影效果）。
     w = x0 * 2 + cw * n + gap * (n - 1)
     h = 300
 
@@ -240,6 +276,7 @@ def pipeline():
     for i, (title, sub, color, kind) in enumerate(PIPELINE):
         cx = x0 + i * (cw + gap)
         out.append(f'  <rect x="{f(cx)}" y="{f(y0)}" width="{cw}" height="{ch}" rx="14" class="card"/>')
+        # 卡片顶部的彩色条，用主题色区分步骤类别。
         out.append(f'  <rect x="{f(cx)}" y="{f(y0)}" width="{cw}" height="4" rx="2" fill="{color}"/>')
         out.append(_glyph(kind, cx + 42, y0 + 56, color))
         out.append(
@@ -249,12 +286,14 @@ def pipeline():
         out.append(
             f'  <text x="{f(cx + 22)}" y="{f(y0 + 122)}" class="mono t3" font-size="13">step {i + 1}</text>'
         )
+        # 相邻卡片之间画箭头；gap-20 让箭头两端都留出间距。
         if i < n - 1:
             ax = cx + cw + 10
             out.append(
                 f'  <path d="M{f(ax)} {f(y0 + ch / 2)}h{f(gap - 20)}" class="ln a" marker-end="url(#arw)"/>'
             )
 
+    # 标题用 insert(0,...) 提到最前，避免影响上面按序绘制的层级。
     out.insert(0, f'  <text x="46" y="42" class="sans t2" font-size="17" font-weight="600">'
                   f'One run, end to end</text>')
     return wrap(
@@ -266,14 +305,16 @@ def pipeline():
 
 
 # --------------------------------------------------------------------------- #
-# 3. Runtime architecture
+# 3. 运行时架构
 # --------------------------------------------------------------------------- #
 
 def runtime():
+    """插图 3：三进程运行时架构（Electron 主进程 / 渲染进程 / Python 后端）。"""
     w, h = 1600, 600
     bw, bh = 380, 316
     y0 = 120
 
+    # 三列：x 坐标 · 标题 · 强调色 · 内部条目（名称 · 说明）
     cols = [
         (60, "Electron main", "#4f8cff", [
             ("BrowserWindow", "frameless shell, native menus"),
@@ -300,6 +341,7 @@ def runtime():
 
     for x, title, accent, items in cols:
         out.append(f'  <rect x="{x}" y="{y0}" width="{bw}" height="{bh}" rx="16" class="card"/>')
+        # 左侧竖向强调条，替代整块着色，保持卡片清爽。
         out.append(f'  <rect x="{x}" y="{y0}" width="5" height="{bh}" rx="2.5" fill="{accent}"/>')
         out.append(
             f'  <text x="{x + 28}" y="{y0 + 44}" class="sans t1" font-size="21" font-weight="600">{esc(title)}</text>'
@@ -314,10 +356,12 @@ def runtime():
             out.append(
                 f'  <text x="{x + 68}" y="{yy + 46}" class="sans t3" font-size="13.5">{esc(desc)}</text>'
             )
+            # 每个条目高 62、步进 74 → 条目之间留 12px 间隙。
             yy += 74
 
-    # arrows
+    # 列间连线（IPC / fetch·SSE）
     def harrow(x1, x2, y, label, dashed=False):
+        """画一条带标签的水平箭头；dashed=True 时改为虚线（表示非直连通道）。"""
         d = ' stroke-dasharray="6 6"' if dashed else ''
         return [
             f'  <path d="M{x1} {y}h{x2 - x1}" class="ln a" marker-end="url(#arw)"{d}/>',
@@ -327,7 +371,8 @@ def runtime():
 
     out += harrow(440, 610, y0 + 96, "IPC")
     out += harrow(990, 1160, y0 + 96, "fetch / SSE")
-    # main → backend (curved under the boxes)
+    # 主进程 → 后端（从卡片下方绕行的一条曲线）
+    # 用三次贝塞尔在两列底部绕一个大弧，避免穿过中间的渲染进程卡片。
     out.append(
         f'  <path d="M250 {y0 + bh}C250 {y0 + bh + 110} 1350 {y0 + bh + 110} 1350 {y0 + bh}" '
         f'class="ln a" marker-end="url(#arw)" stroke-dasharray="6 6"/>'
@@ -345,12 +390,14 @@ def runtime():
     )
 
 
-# --------------------------------------------------------------------------- #
-# 4. Extension sources
-# --------------------------------------------------------------------------- #
+# ─────────────────────────────────────────────────────────────────────────── #
+# 4. 扩展来源
+# ─────────────────────────────────────────────────────────────────────────── #
 
 def _source_icon(kind, cx, cy, color):
+    """按来源类型绘制一个圆形图标（GitHub / Hugging Face / ModelScope）。"""
     if kind == "github":
+        # 简化版 Git 分支图：三个节点 + 折线连边
         return (
             f'<g transform="translate({f(cx - 22)} {f(cy - 22)})">'
             f'<circle cx="22" cy="22" r="20" fill="none" stroke="{color}" stroke-width="2"/>'
@@ -361,6 +408,7 @@ def _source_icon(kind, cx, cy, color):
             f'stroke-width="2" stroke-linecap="round"/></g>'
         )
     if kind == "hf":
+        # 一张笑脸，代表 Hugging Face
         return (
             f'<g transform="translate({f(cx - 22)} {f(cy - 22)})">'
             f'<circle cx="22" cy="22" r="20" fill="none" stroke="{color}" stroke-width="2"/>'
@@ -369,6 +417,7 @@ def _source_icon(kind, cx, cy, color):
             f'<path d="M13 27a9 9 0 0 0 18 0" fill="none" stroke="{color}" stroke-width="2.2" '
             f'stroke-linecap="round"/></g>'
         )
+    # 兜底（ModelScope）：立方体线框
     return (
         f'<g transform="translate({f(cx - 22)} {f(cy - 22)})">'
         f'<circle cx="22" cy="22" r="20" fill="none" stroke="{color}" stroke-width="2"/>'
@@ -379,12 +428,14 @@ def _source_icon(kind, cx, cy, color):
 
 
 def extensions():
+    """插图 4：扩展安装的三种来源（GitHub / Hugging Face / ModelScope）。"""
     cw, ch, gap = 420, 214, 40
     x0, y0 = 46, 56
     n = 3
     w = x0 * 2 + cw * n + gap * (n - 1)
     h = 356
 
+    # 三张卡片：显示名 · 图标种类 · 主题色 · 示例 URL 文本
     srcs = [
         ("GitHub", "github", "#8b93a7", "github.com/user/repo"),
         ("Hugging Face", "hf", "#f59e0b", "huggingface.co/user/model"),
@@ -405,6 +456,7 @@ def extensions():
         out.append(
             f'  <text x="{f(cx + 92)}" y="{f(y0 + 78)}" class="mono t3" font-size="12.5">{esc(example)}</text>'
         )
+        # 分隔线：上半是来源与示例，下半是安装行为的三个要点。
         out.append(f'  <line x1="{f(cx + 24)}" y1="{f(y0 + 108)}" x2="{f(cx + cw - 24)}" y2="{f(y0 + 108)}" class="lnd"/>')
         out.append(f'  <text x="{f(cx + 24)}" y="{f(y0 + 136)}" class="sans t2" font-size="14">'
                    f'URL resolves to a file tree</text>')
@@ -417,6 +469,7 @@ def extensions():
                 f'  <path d="M{f(cx + cw + 12)} {f(y0 + ch / 2)}h{f(gap - 24)}" class="lnd a"/>'
             )
 
+    # 底部两行说明：居中与画布底部保留 46 / 20 px 边距。
     out.append(
         f'  <text x="{f(w / 2)}" y="{f(h - 46)}" text-anchor="middle" class="sans t2" font-size="15.5">'
         f'manifest.json + entrypoint are validated before the package is moved into '
@@ -435,6 +488,7 @@ def extensions():
 
 
 def main():
+    """入口：依次生成四张插图并写出到 OUT_DIR，打印每张的体积。"""
     os.makedirs(OUT_DIR, exist_ok=True)
     for name, fn in (
         ("node-palette.svg", node_palette),

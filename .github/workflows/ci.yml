@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  build:
+  frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,3 +27,167 @@ jobs:
 
       - name: Build (electron-vite)
         run: npm run build
+
+      - name: Bundle size budget
+        run: npm run sizes
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements-mcp.txt
+          pip install fastapi "uvicorn[standard]" pydantic numpy trimesh httpx
+
+      - name: Syntax check (py_compile)
+        run: python -m compileall server -q
+
+      - name: Unit tests (path boundaries / workflows / jobs)
+        working-directory: server
+        run: |
+          python tests/test_paths.py
+          python tests/test_jobs.py
+          python tests/test_workflows.py
+
+      - name: OpenAPI contract snapshot check
+        run: python scripts/export_openapi.py --check
+
+      - name: MCP stdio smoke test
+        run: python scripts/test_mcp_stdio.py
+
+      - name: pip dependency sanity (pip check)
+        run: python -m pip check
+
+  integration:
+    # 端到端冒烟（文档 5.1 integration job）：真实起 uvicorn 后端，
+    # 走 HTTP 验证 health / 认证 / workflows CRUD 全链路。
+    runs-on: ubuntu-latest
+    needs: [python]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements-mcp.txt
+          pip install fastapi "uvicorn[standard]" pydantic numpy trimesh httpx
+
+      - name: Start backend and smoke test
+        env:
+          MESHFORGE_API_PORT: '8971'
+        run: |
+          export MESHFORGE_DATA_DIR="$(mktemp -d)"
+          cd server
+          nohup python -m uvicorn main:app --host 127.0.0.1 --port 8971 > "$MESHFORGE_DATA_DIR/uvicorn.log" 2>&1 &
+          echo "$!" > /tmp/meshforge.pid
+
+          # 等健康探针就绪（最多 30s）。
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:8971/health" | grep -q '"ok"'; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://127.0.0.1:8971/health" | grep -q '"ok"' || { cat "$MESHFORGE_DATA_DIR/uvicorn.log"; exit 1; }
+
+          # 认证：无 token 401，带 token 200（token 由后端写入数据目录）。
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8971/workflows")
+          [ "$code" = "401" ] || { echo "expected 401 without token, got $code"; exit 1; }
+          TOKEN=$(cat "$MESHFORGE_DATA_DIR/.api-token")
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8971/workflows")
+          [ "$code" = "200" ] || { echo "expected 200 with token, got $code"; exit 1; }
+
+          # workflows CRUD 往返。
+          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d '{"id":"smoke","name":"Smoke","nodes":[],"edges":[]}' \
+            "http://127.0.0.1:8971/workflows" | grep -q '"ok"'
+          curl -fsS -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8971/workflows/smoke" | grep -q '"Smoke"'
+          curl -fsS -X DELETE -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8971/workflows/smoke" | grep -q '"ok"'
+
+          # 就绪探针。
+          curl -fsS "http://127.0.0.1:8971/health/ready" | grep -q '"ready"'
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [ -f /tmp/meshforge.pid ]; then kill "$(cat /tmp/meshforge.pid)" || true; fi
+
+  quality:
+    # 依赖质量门禁（文档 5.1 quality job）：audit 高危告警；不阻塞合并但必须在日志可见。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (oxlint)
+        run: npm run lint
+
+      - name: npm audit (runtime deps, critical only)
+        run: npm audit --omit=dev --audit-level=critical
+        continue-on-error: true
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements-mcp.txt
+          pip install fastapi "uvicorn[standard]" pydantic numpy trimesh httpx
+
+      - name: pip check
+        run: python -m pip check
+
+      - name: Generate SBOM (CycloneDX)
+        # 供应链治理（优化文档 13.6 / §22）：syft 扫描仓库依赖树，
+        # 产出 CycloneDX JSON 并作为 artifact 上传，供归档与漏洞比对。
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          artifact-name: meshforge-sbom.json
+
+  package:
+    # 打包冒烟（文档 5.1 package job）：验证 extraResources 落点与产物结构。
+    # Windows runner 上执行，因为发布目标是 win-unpacked。
+    runs-on: windows-latest
+    needs: [frontend, python, integration]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build + pack (electron-builder --dir)
+        run: npm run pack
+
+      - name: Verify packaged server resources
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'dist/win-unpacked/resources/server/main.py')) {
+            throw 'resources/server/main.py missing from package'
+          }
+          if (Test-Path 'dist/win-unpacked/resources/app.asar') {
+            Write-Host 'app.asar present (expected); server must live in resources/server'
+          }

@@ -1,0 +1,35 @@
+# 依赖自动更新（优化文档 8 / 13.6：供应链治理起步）。
+#
+# 分组策略：开发依赖与次要（minor/patch）更新打包成单个 PR，避免周更噪音；
+# 生产依赖的 major 升级保持单独立 PR，逐个显式过审。
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-minor:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      prod-minor:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: pip
+    directory: /server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

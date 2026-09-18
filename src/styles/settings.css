@@ -93,11 +93,30 @@
   color: var(--text-faint);
 }
 
+/* 分区顶部的契约提示（如"设置项尚未接入后端"），比 subtitle 更醒目。 */
+.st-sectionhint {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted, var(--text-faint));
+  padding: 8px 12px;
+  border: 1px solid var(--border, rgba(128, 128, 128, 0.25));
+  border-radius: 8px;
+  background: var(--surface-weak, rgba(128, 128, 128, 0.06));
+}
+
+
 .st-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+}
+
+/* A card that spans the full grid row, e.g. the tall "System metrics" block,
+   so the shorter cards below it line up in uniform rows. */
+.st-card--full {
+  grid-column: 1 / -1;
 }
 
 .st-card {
@@ -464,6 +483,15 @@
 
 .st-agent__urlrow button:hover:not(:disabled) {
   background: var(--bg-hover);
+}
+
+/* Icon-only eye button used for the API key field. */
+.st-agent__urlrow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  padding: 0 !important;
 }
 
 .st-agent__hint {
@@ -1109,6 +1137,16 @@
   background: rgba(192, 132, 252, 0.12);
 }
 
+.ex-group__icon--view {
+  color: #2dd4bf;
+  background: rgba(45, 212, 191, 0.12);
+}
+
+.ex-group__icon--image {
+  color: #e879f9;
+  background: rgba(232, 121, 249, 0.12);
+}
+
 .ex-group__title {
   margin: 0;
   font-size: 13px;
@@ -1176,6 +1214,16 @@
 .ex-card__icon--model {
   color: var(--accent);
   background: rgba(34, 211, 238, 0.12);
+}
+
+.ex-card__icon--view {
+  color: #2dd4bf;
+  background: rgba(45, 212, 191, 0.13);
+}
+
+.ex-card__icon--image {
+  color: #e879f9;
+  background: rgba(232, 121, 249, 0.13);
 }
 
 .ex-card__icon .ex-icon {
@@ -1412,6 +1460,16 @@
 .ex-pill--model {
   color: var(--accent);
   background: rgba(34, 211, 238, 0.12);
+}
+
+.ex-pill--view {
+  color: #2dd4bf;
+  background: rgba(45, 212, 191, 0.13);
+}
+
+.ex-pill--image {
+  color: #e879f9;
+  background: rgba(232, 121, 249, 0.13);
 }
 
 .ex-io {

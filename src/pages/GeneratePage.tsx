@@ -1,25 +1,28 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { fullUrl, getJob, getWorkflow, importMeshByPath, listLibrary, processMesh, saveWorkflow } from '../api'
+// ─── 生成页：左侧工作流参数面板 + 右侧 3D 查看器 ──────────────────────────────
+// 这是应用的主工作台。用户在这里挑选工作流、填写参数、执行生成，并在右侧
+// three.js 查看器里预览/导入/导出网格。页面同时承载与"智能体对话模式"的切换。
+//
+// 结构（优化文档 7.3 拆分）：网格动作在 useMeshActions、资产库状态在
+// useLibraryPanel、顶部工具栏与变换工具条在 ViewerToolbar；本文件保留
+// 工作流选择 / 参数编辑 / 运行控制的主体逻辑。
+
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { fullUrl, getWorkflow, saveWorkflow } from '../api'
 import ErrorBoundary, { type ErrorBoundaryFallbackProps } from '../components/ErrorBoundary'
-// three.js (~2MB) is deferred one level further: the page chrome, params and
-// chat paint immediately, the viewport loads in behind a Suspense fallback.
+// three.js（约 2MB）再延后一层加载：页面骨架、参数面板与对话区先绘制出来，
+// 视口在 Suspense 兜底之后异步补上，避免首屏被大包阻塞。
 const Viewer3D = lazy(() => import('../components/Viewer3D'))
 import { getT, useT } from '../i18n'
 import { useLogsStore } from '../stores/logs'
 import { useNavigationStore } from '../stores/navigation'
 import { useSceneStore } from '../stores/scene'
-import { topoSort, useWorkflowRunStore } from '../stores/workflowRun'
+import { topoSort, useWorkflowRunStore, HUNYUAN_MV_GENERATOR } from '../stores/workflowRun'
 import { useWorkflowsStore } from '../stores/workflows'
 import type { WFEdge, WFNode, Workflow } from '../types'
-import ChatPanel from './generate/ChatPanel'
-import {
-  getDefaultCollapsedSectionKeys,
-  isOpenable,
-  toggleSectionKey,
-  type LibraryEntry,
-  type LibrarySortMode
-} from './generate/assetLibrary'
+import ChatPanel from './generate/chatPanel'
+import { isOpenable, toggleSectionKey, type LibraryEntry } from './generate/assetLibrary'
 import { firstPreflightIssue } from './generate/preflight'
+import { findStaleAssetRefs } from './generate/staleAssets'
 import { WorkflowDropdown } from './generate/WorkflowDropdown'
 import {
   GeneratorParamRow,
@@ -29,24 +32,18 @@ import {
   WaitParamRow,
   type PatchFn
 } from './generate/ParamRows'
-import {
-  ChevronDown,
-  DecimatePopover,
-  EXPORT_FORMATS,
-  GenerationHUD,
-  LightPopover,
-  SmoothPopover,
-  Spinner,
-  ViewerLoadError
-} from './generate/ToolbarBits'
-import { LibraryPanel } from './generate/LibraryPanel'
+import { GenerationHUD, ViewerLoadError } from './generate/ToolbarBits'
+import { GizmoToolbar, ViewerToolbar } from './generate/ViewerToolbar'
+import { useLibraryPanel } from './generate/useLibraryPanel'
+import { useMeshActions } from './generate/useMeshActions'
+import type { OpenPanel } from './generate/viewerState'
 
+/** 左侧面板宽度的下限（px）：再窄参数行就放不下了。 */
 const MIN_WIDTH = 220
+/** 左侧面板宽度的上限（px）：再宽会挤压 3D 视口。 */
 const MAX_WIDTH = 520
+/** 左侧面板的初始宽度（px）。 */
 const DEFAULT_WIDTH = 320
-
-type OpenPanel =
-  | 'import' | 'library' | 'export' | 'smooth' | 'decimate' | 'light' | null
 
 // ─── 主页面 ────────────────────────────────────────────────────────────────
 
@@ -61,6 +58,7 @@ export default function GeneratePage() {
   const pushMeshUrl = useSceneStore((s) => s.pushMeshUrl)
   const undoMesh = useSceneStore((s) => s.undoMesh)
   const redoMesh = useSceneStore((s) => s.redoMesh)
+  // 撤销/重做是否可用，取决于历史游标是否触到两端。
   const canUndoMesh = useSceneStore((s) => s.historyIndex > 0)
   const canRedoMesh = useSceneStore((s) => s.historyIndex < s.meshHistory.length - 1)
   const meshStats = useSceneStore((s) => s.meshStats)
@@ -81,28 +79,20 @@ export default function GeneratePage() {
   const [edges, setEdges] = useState<WFEdge[]>([])
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null)
   const [mode, setMode] = useState<'basic' | 'chat'>('basic')
-  const [unloadStatus, setUnloadStatus] = useState<'idle' | 'done'>('idle')
-  const [importing, setImporting] = useState(false)
-  const [decimating, setDecimating] = useState(false)
-  const [smoothing, setSmoothing] = useState(false)
-  const [exporting, setExporting] = useState<'glb' | 'obj' | 'stl' | 'ply' | null>(null)
+  // 拖拽标记放 ref 里：mousemove 高频触发，用 state 会引发无谓重渲染。
   const dragging = useRef(false)
 
-  // Library（workspace 资产库）状态
-  const [libraryEntries, setLibraryEntries] = useState<LibraryEntry[]>([])
-  const [librarySelectedId, setLibrarySelectedId] = useState<string | null>(null)
-  const [libraryLoaded, setLibraryLoaded] = useState(false)
-  const [libraryLoading, setLibraryLoading] = useState(false)
-  const [libraryError, setLibraryError] = useState<string | null>(null)
-  const [librarySearch, setLibrarySearch] = useState('')
-  const [librarySort, setLibrarySort] = useState<LibrarySortMode>('type')
-  const [libraryCollapsed, setLibraryCollapsed] = useState<string[]>(() => getDefaultCollapsedSectionKeys())
+  // 网格动作与资产库状态（拆出的 hook）
+  const meshActions = useMeshActions(meshUrl, pushMeshUrl, setOpenPanel)
+  const library = useLibraryPanel(openPanel)
 
+  /** 运行中或暂停中都算"忙"：此时禁止改工作流选择、生成、清空等操作。 */
   const busy = runState === 'running' || runState === 'paused'
   const hasModel = !!meshUrl
   const t = useT()
 
   useEffect(() => {
+    // 列表只加载一次；用 loaded 兜住 StrictMode 下的重复挂载。
     if (!loaded) void loadList()
   }, [loaded, loadList])
 
@@ -113,6 +103,7 @@ export default function GeneratePage() {
     }
   }, [workflows, selectedId])
 
+  // 选中项变化时拉取完整工作流（列表里只有摘要，不含 nodes/edges）。
   useEffect(() => {
     if (!selectedId) return
     getWorkflow(selectedId)
@@ -120,36 +111,15 @@ export default function GeneratePage() {
         setWorkflow(wf)
         setNodes(wf.nodes)
         setEdges(wf.edges)
+        // 行为债清偿（§19.3）：旧版工作流可能引用 workspace 外磁盘路径或
+        // 已被清理的临时转换目录，加载时一次性提醒，避免到运行期才报 403/404。
+        const stale = findStaleAssetRefs(wf.nodes)
+        if (stale.length > 0) {
+          useLogsStore.getState().warn(getT('generate.log.staleAssets', { count: stale.length, labels: stale.join(', ') }))
+        }
       })
       .catch(() => setWorkflow(null))
   }, [selectedId])
-
-  // Library：打开面板时懒加载（首次），Refresh 强制刷新
-  async function loadLibrary(force = false): Promise<void> {
-    if (libraryLoading) return
-    if (libraryLoaded && !force) return
-    setLibraryLoading(true)
-    setLibraryError(null)
-    try {
-      const entries = await listLibrary()
-      setLibraryEntries(entries)
-      setLibrarySelectedId((cur) =>
-        cur && entries.some((e) => e.id === cur) ? cur : entries.find(isOpenable)?.id ?? entries[0]?.id ?? null
-      )
-      setLibraryLoaded(true)
-    } catch (err) {
-      setLibraryLoaded(false)
-      setLibraryError(String(err instanceof Error ? err.message : err))
-    } finally {
-      setLibraryLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (openPanel !== 'library' || libraryLoaded || libraryLoading) return
-    void loadLibrary()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openPanel, libraryLoaded, libraryLoading])
 
   /** 打开选中的库资产：直接加载到 3D 查看器并计入撤销历史。 */
   function handleOpenLibraryAsset(entry: LibraryEntry | null): void {
@@ -159,6 +129,7 @@ export default function GeneratePage() {
     setOpenPanel(null)
   }
 
+  /** 局部更新某个节点的参数（只合并 patch 字段，其余原样保留）。 */
   const patchNode = useCallback<PatchFn>((nodeId, patch) => {
     setNodes((nds) =>
       nds.map((n) =>
@@ -172,9 +143,10 @@ export default function GeneratePage() {
   // 参数修改后 500ms 防抖保存（首次挂载跳过）
   const didMount = useRef(false)
   useEffect(() => {
+    // 首次挂载时 nodes/edges 刚从后端载入，不该立刻回写覆盖，因此直接跳过一轮。
     if (!didMount.current) { didMount.current = true; return }
     if (!workflow || !selectedId) return
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       void saveWorkflow({
         ...workflow,
         nodes,
@@ -182,7 +154,8 @@ export default function GeneratePage() {
         updatedAt: new Date().toISOString()
       }).catch(() => undefined)
     }, 500)
-    return () => clearTimeout(t)
+    // 依赖变化时取消上一轮定时器，实现真正的"最后一次修改后 500ms 才存"。
+    return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅对可编辑状态防抖
   }, [nodes, edges])
 
@@ -200,11 +173,13 @@ export default function GeneratePage() {
   // Gizmo 快捷键：W 移动 / R 旋转 / S 缩放 / Esc 退出
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
+      // 焦点在输入控件里时不抢键，否则用户在文本框打 w/s/r 会被当成快捷键。
       const el = document.activeElement as HTMLElement | null
       if (el && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el.isContentEditable)) return
       if (e.key === 'Escape') { setGizmoMode(null); return }
       if (!hasModel || !meshSelected) return
       const k = e.key.toLowerCase()
+      // 再按同一个键则取消该模式（开关式切换）。
       if (k === 'w') setGizmoMode(gizmoMode === 'translate' ? null : 'translate')
       else if (k === 'r') setGizmoMode(gizmoMode === 'rotate' ? null : 'rotate')
       else if (k === 's') setGizmoMode(gizmoMode === 'scale' ? null : 'scale')
@@ -223,103 +198,28 @@ export default function GeneratePage() {
         )
     : []
 
+  // 提交前的第一处问题：非空即代表"不可运行"，用于禁用生成按钮并给出提示。
   const preflightIssue = workflow ? firstPreflightIssue(nodes, edges) : null
+
+  // 判断每个 imageNode 是否直连 hunyuan3d-2-mv 生成器（四视角）：若是则在图片区
+  // 显示 4 视角上传 UI。
+  const mvImageNodeIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const n of nodes) {
+      if (n.type !== 'generatorNode') continue
+      if (String(n.data.params.generatorId ?? '') !== HUNYUAN_MV_GENERATOR) continue
+      const up = edges.find((e) => e.target === n.id)?.source
+      if (up) ids.add(up)
+    }
+    return ids
+  }, [nodes, edges])
 
   function handleGenerate(): void {
     if (!workflow || preflightIssue) return
+    // 先把当前编辑态落盘再运行：避免运行器读到旧快照（比如刚改完参数就点生成）。
     const wf = { ...workflow, nodes, edges, updatedAt: new Date().toISOString() }
     void saveWorkflow(wf).catch(() => undefined)
     void run(wf)
-  }
-
-  function handleUnloadAll(): void {
-    useSceneStore.setState({
-      meshUrl: null,
-      meshSelected: false,
-      meshStats: null,
-      gizmoMode: null,
-      meshHistory: [],
-      historyIndex: -1
-    })
-    setUnloadStatus('done')
-    setTimeout(() => setUnloadStatus('idle'), 2000)
-  }
-
-  async function handleExport(format: 'glb' | 'obj' | 'stl' | 'ply'): Promise<void> {
-    if (!meshUrl) return
-    if (format === 'glb') {
-      // GLB is the viewer's native format — download the loaded file directly.
-      const a = document.createElement('a')
-      a.href = meshUrl
-      a.download = `meshforge-${Date.now()}.glb`
-      a.click()
-      return
-    }
-    // obj / stl / ply → mesh-exporter job (trimesh backend, /process/mesh)
-    if (exporting) return
-    setExporting(format)
-    try {
-      const { job_id } = await processMesh(meshUrl, 'mesh-exporter', { format })
-      let status = await getJob(job_id)
-      for (let i = 0; i < 60 && (status.state === 'pending' || status.state === 'running'); i++) {
-        await new Promise((r) => setTimeout(r, 500))
-        status = await getJob(job_id)
-      }
-      if (status.state !== 'succeeded' || !status.result_url) {
-        useLogsStore.getState().error(getT('generate.log.exportError', { format, detail: status.error || status.state }))
-        return
-      }
-      const a = document.createElement('a')
-      a.href = fullUrl(status.result_url)
-      a.download = `meshforge-${Date.now()}.${format}`
-      a.click()
-      useLogsStore.getState().info(getT('generate.log.exportSaved', { format }))
-    } catch (e) {
-      useLogsStore.getState().error(getT('generate.log.exportError', { format, detail: e instanceof Error ? e.message : String(e) }))
-    } finally {
-      setExporting(null)
-    }
-  }
-
-  // Import mesh through the Electron main process (native dialog → filesystem
-  // path → backend serves the file). Modly-aligned: this avoids Chromium's
-  // <input type=file> entirely, which is documented to freeze this machine's
-  // renderer, and avoids shipping file bytes through the renderer.
-  async function handleImportMesh(): Promise<void> {
-    if (!window.meshforge?.selectMeshFile) {
-      useLogsStore.getState().warn(getT('generate.log.importNativeUnavailable'))
-      return
-    }
-    const filePath = await window.meshforge.selectMeshFile()
-    if (!filePath) return
-    setOpenPanel(null)
-    setImporting(true)
-    useLogsStore.getState().info(getT('generate.log.importPicked', { file: filePath }))
-    try {
-      const { url } = await importMeshByPath(filePath)
-      pushMeshUrl(fullUrl(url))
-      useLogsStore.getState().info(getT('generate.log.importPushed', { url: fullUrl(url) }))
-    } catch (e) {
-      useLogsStore.getState().error(getT('generate.log.importFailed', { detail: e instanceof Error ? e.message : String(e) }))
-    } finally {
-      setImporting(false)
-    }
-  }
-
-  function handleDecimate(targetFaces: number): void {
-    setDecimating(true)
-    setTimeout(() => {
-      setDecimating(false)
-      useLogsStore.getState().error(getT('generate.log.decimateUnavailable', { target: targetFaces }))
-    }, 500)
-  }
-
-  function handleSmooth(iterations: number): void {
-    setSmoothing(true)
-    setTimeout(() => {
-      setSmoothing(false)
-      useLogsStore.getState().error(getT('generate.log.smoothUnavailable', { iterations }))
-    }, 500)
   }
 
   // 左面板拖宽
@@ -328,10 +228,12 @@ export default function GeneratePage() {
     dragging.current = true
     const onMove = (ev: MouseEvent): void => {
       if (!dragging.current) return
+      // 用 movementX 增量累加并夹在 [MIN_WIDTH, MAX_WIDTH] 内。
       setPanelWidth((w) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w + ev.movementX)))
     }
     const onUp = (): void => {
       dragging.current = false
+      // 松手即解绑，避免监听器泄漏到后续交互。
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
@@ -339,6 +241,7 @@ export default function GeneratePage() {
     window.addEventListener('mouseup', onUp)
   }, [])
 
+  /** 跳到工作流编辑器（若已有选中项，顺带把它设为编辑器当前工作流）。 */
   function openEditor(): void {
     if (selectedId) void selectInStore(selectedId)
     go('workflows')
@@ -392,7 +295,7 @@ export default function GeneratePage() {
             <div className="gp-params">
               {paramNodes.map((node) => (
                 <div key={node.id} className="gp-row">
-                  {node.type === 'imageNode' && <ImageParamRow node={node} onPatch={patchNode} />}
+                  {node.type === 'imageNode' && <ImageParamRow node={node} onPatch={patchNode} mv={mvImageNodeIds.has(node.id)} />}
                   {node.type === 'textNode' && <TextParamRow node={node} onPatch={patchNode} />}
                   {node.type === 'meshNode' && <MeshParamRow node={node} onPatch={patchNode} />}
                   {node.type === 'waitNode' && <WaitParamRow nodeId={node.id} />}
@@ -458,257 +361,51 @@ export default function GeneratePage() {
 
       {/* 右侧：工具栏 + 3D 查看器 */}
       <div className="gp-main">
-        {/* 顶部工具栏 */}
-        <div className="gp-toolbar">
-          {/* Free memory */}
-          <button className="gp-toolbtn" onClick={handleUnloadAll} disabled={busy} title={t('generate.actions.freeModelTitle')}>
-            <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-            </svg>
-            {unloadStatus === 'done' ? t('generate.actions.freed') : t('generate.actions.freeMemory')}
-          </button>
-
-          <div className="gp-toolbar__sep" />
-
-          {/* Undo / Redo */}
-          <button className="gp-toolbtn gp-toolbtn--icon" onClick={undoMesh} disabled={!canUndoMesh} title={t('generate.actions.undo')} aria-label={t('generate.actions.undo')}>
-            <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-              <path d="M3 7v6h6" />
-              <path d="M3 13a9 9 0 1 0 2.28-5.93" />
-            </svg>
-          </button>
-          <button className="gp-toolbtn gp-toolbtn--icon" onClick={redoMesh} disabled={!canRedoMesh} title={t('generate.actions.redo')} aria-label={t('generate.actions.redo')}>
-            <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-              <path d="M21 7v6h-6" />
-              <path d="M21 13a9 9 0 1 1-2.28-5.93" />
-            </svg>
-          </button>
-
-          <div className="gp-toolbar__sep" />
-
-          {/* Import */}
-          <div className="gp-relative">
-            <button
-              className={`gp-toolbtn ${openPanel === 'import' ? 'gp-toolbtn--active' : ''}`}
-              onClick={() => setOpenPanel((p) => (p === 'import' ? null : 'import'))}
-              disabled={importing}
-            >
-              {importing ? <Spinner /> : (
-                <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-              )}
-              {importing ? t('generate.import.importing') : t('generate.import.title')}
-              {!importing && <ChevronDown />}
-            </button>
-            {openPanel === 'import' && (
-              <div className="gp-menu">
-                <button onClick={() => void handleImportMesh()}>
-                  <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                  </svg>
-                  <span>
-                    <span className="gp-menu__title">{t('generate.import.mesh')}</span>
-                    <span className="gp-menu__desc">{t('generate.import.formats')}</span>
-                  </span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Library */}
-          <div className="gp-relative">
-            <button
-              className={`gp-toolbtn ${openPanel === 'library' ? 'gp-toolbtn--active' : ''}`}
-              onClick={() => setOpenPanel((p) => (p === 'library' ? null : 'library'))}
-            >
-              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                <path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h10" />
-              </svg>
-              {t('generate.library.title')}
-            </button>
-            {openPanel === 'library' && (
-              <LibraryPanel
-                entries={libraryEntries}
-                selectedId={librarySelectedId}
-                loading={libraryLoading}
-                error={libraryError}
-                search={librarySearch}
-                sort={librarySort}
-                collapsed={libraryCollapsed}
-                onRefresh={() => void loadLibrary(true)}
-                onSelect={setLibrarySelectedId}
-                onSearch={setLibrarySearch}
-                onSort={setLibrarySort}
-                onToggleSection={(keys, key) => setLibraryCollapsed(toggleSectionKey(keys, key))}
-                onOpen={handleOpenLibraryAsset}
-              />
-            )}
-          </div>
-
-          {hasModel && (
-            <>
-              <div className="gp-toolbar__sep" />
-
-              {/* Export */}
-              <div className="gp-relative">
-                <button
-                  className={`gp-toolbtn ${openPanel === 'export' || exporting ? 'gp-toolbtn--active' : ''}`}
-                  onClick={() => setOpenPanel((p) => (p === 'export' ? null : 'export'))}
-                  disabled={exporting !== null}
-                >
-                  <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 5 17 10" />
-                    <line x1="12" y1="5" x2="12" y2="15" />
-                  </svg>
-                  {exporting ? t('generate.export.exportingFmt', { fmt: exporting }) : t('generate.export.title')}
-                  <ChevronDown />
-                </button>
-                {openPanel === 'export' && (
-                  <div className="gp-menu">
-                    {EXPORT_FORMATS.map(({ fmt, descKey }) => (
-                      <button
-                        key={fmt}
-                        disabled={exporting !== null}
-                        onClick={() => { void handleExport(fmt); setOpenPanel(null) }}
-                      >
-                        <span className="gp-menu__fmt">.{fmt}</span>
-                        <span className="gp-menu__desc">{exporting === fmt ? t('generate.export.processing') : t(descKey)}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Smooth */}
-              <div className="gp-relative">
-                <button
-                  className={`gp-toolbtn ${openPanel === 'smooth' || smoothing ? 'gp-toolbtn--active' : ''}`}
-                  onClick={() => setOpenPanel((p) => (p === 'smooth' ? null : 'smooth'))}
-                  disabled={smoothing}
-                >
-                  {smoothing ? <Spinner /> : (
-                    <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  )}
-                  {smoothing ? t('generate.common.processing') : t('generate.smooth.title')}
-                </button>
-                {openPanel === 'smooth' && (
-                  <SmoothPopover smoothing={smoothing} onSmooth={handleSmooth} onClose={() => setOpenPanel(null)} />
-                )}
-              </div>
-
-              {/* Decimate */}
-              <div className="gp-relative">
-                <button
-                  className={`gp-toolbtn ${openPanel === 'decimate' || decimating ? 'gp-toolbtn--active' : ''}`}
-                  onClick={() => setOpenPanel((p) => (p === 'decimate' ? null : 'decimate'))}
-                  disabled={decimating}
-                >
-                  {decimating ? <Spinner /> : (
-                    <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                      <polygon points="12 2 22 20 2 20" />
-                      <line x1="12" y1="9" x2="8" y2="17" />
-                      <line x1="12" y1="9" x2="16" y2="17" />
-                      <line x1="8" y1="17" x2="16" y2="17" />
-                    </svg>
-                  )}
-                  {decimating ? t('generate.common.processing') : t('generate.decimate.title')}
-                </button>
-                {openPanel === 'decimate' && (
-                  <DecimatePopover
-                    currentTriangles={meshStats?.triangles ?? null}
-                    decimating={decimating}
-                    onDecimate={handleDecimate}
-                    onClose={() => setOpenPanel(null)}
-                  />
-                )}
-              </div>
-            </>
-          )}
-
-          <div className="gp-spacer" />
-
-          {/* Light — 始终靠右 */}
-          <div className="gp-relative">
-            <button
-              className={`gp-toolbtn gp-toolbtn--icon ${openPanel === 'light' ? 'gp-toolbtn--active' : ''}`}
-              title={t('generate.light.title')}
-              aria-label={t('generate.light.title')}
-              onClick={() => setOpenPanel((p) => (p === 'light' ? null : 'light'))}
-            >
-              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                <circle cx="12" cy="12" r="4" />
-                <line x1="12" y1="2" x2="12" y2="5" /><line x1="12" y1="19" x2="12" y2="22" />
-                <line x1="4.22" y1="4.22" x2="6.34" y2="6.34" /><line x1="17.66" y1="17.66" x2="19.78" y2="19.78" />
-                <line x1="2" y1="12" x2="5" y2="12" /><line x1="19" y1="12" x2="22" y2="12" />
-                <line x1="4.22" y1="19.78" x2="6.34" y2="17.66" /><line x1="17.66" y1="6.34" x2="19.78" y2="4.22" />
-              </svg>
-            </button>
-            {openPanel === 'light' && (
-              <LightPopover
-                settings={light}
-                onChange={(patch) => setLight(patch)}
-                onClose={() => setOpenPanel(null)}
-              />
-            )}
-          </div>
-        </div>
+        <ViewerToolbar
+          openPanel={openPanel}
+          setOpenPanel={setOpenPanel}
+          busy={busy}
+          canUndoMesh={canUndoMesh}
+          canRedoMesh={canRedoMesh}
+          hasModel={hasModel}
+          triangles={meshStats?.triangles ?? null}
+          light={light}
+          setLight={setLight}
+          importing={meshActions.importing}
+          decimating={meshActions.decimating}
+          smoothing={meshActions.smoothing}
+          exporting={meshActions.exporting}
+          unloadStatus={meshActions.unloadStatus}
+          onUnloadAll={meshActions.handleUnloadAll}
+          onImportMesh={() => void meshActions.handleImportMesh()}
+          onExport={(fmt) => void meshActions.handleExport(fmt)}
+          onDecimate={meshActions.handleDecimate}
+          onSmooth={meshActions.handleSmooth}
+          libraryEntries={library.libraryEntries}
+          librarySelectedId={library.librarySelectedId}
+          libraryLoading={library.libraryLoading}
+          libraryError={library.libraryError}
+          librarySearch={library.librarySearch}
+          librarySort={library.librarySort}
+          libraryCollapsed={library.libraryCollapsed}
+          onLibraryRefresh={() => void library.loadLibrary(true)}
+          onLibrarySelect={library.setLibrarySelectedId}
+          onLibrarySearch={library.setLibrarySearch}
+          onLibrarySort={library.setLibrarySort}
+          onLibraryToggleSection={(keys, key) => library.setLibraryCollapsed(toggleSectionKey(keys, key))}
+          onLibraryOpen={handleOpenLibraryAsset}
+        />
 
         {/* 变换工具条（模型选中后出现） */}
-        <div className="gp-tools">
-          {hasModel && meshSelected && (
-            <>
-              <button
-                className={`gp-tools__btn ${gizmoMode === 'translate' ? 'gp-tools__btn--active' : ''}`}
-                title={t('generate.tools.move')}
-                aria-label={t('generate.tools.move')}
-                onClick={() => setGizmoMode(gizmoMode === 'translate' ? null : 'translate')}
-              >
-                <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                  <polyline points="5 9 2 12 5 15" /><polyline points="9 5 12 2 15 5" />
-                  <polyline points="15 19 12 22 9 19" /><polyline points="19 9 22 12 19 15" />
-                  <line x1="2" y1="12" x2="22" y2="12" /><line x1="12" y1="2" x2="12" y2="22" />
-                </svg>
-              </button>
-              <button
-                className={`gp-tools__btn ${gizmoMode === 'rotate' ? 'gp-tools__btn--active' : ''}`}
-                title={t('generate.tools.rotate')}
-                aria-label={t('generate.tools.rotate')}
-                onClick={() => setGizmoMode(gizmoMode === 'rotate' ? null : 'rotate')}
-              >
-                <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                  <path d="M21 2v6h-6" />
-                  <path d="M21 13a9 9 0 1 1-3-7.7L21 8" />
-                </svg>
-              </button>
-              <button
-                className={`gp-tools__btn ${gizmoMode === 'scale' ? 'gp-tools__btn--active' : ''}`}
-                title={t('generate.tools.scale')}
-                aria-label={t('generate.tools.scale')}
-                onClick={() => setGizmoMode(gizmoMode === 'scale' ? null : 'scale')}
-              >
-                <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                  <path d="M15 3h6v6" /><path d="M9 21H3v-6" />
-                  <path d="M21 3l-7 7" /><path d="M3 21l7-7" />
-                </svg>
-              </button>
-            </>
-          )}
-        </div>
+        <GizmoToolbar />
 
         <div className="gp-viewer">
           <ErrorBoundary
             label="Viewer3D"
             fallback={({ error }: ErrorBoundaryFallbackProps) => <ViewerLoadError error={error} />}
           >
-            {/* Always mounted: with no model the empty state (persistent ground
-                grid + hint overlay) lives inside Viewer3D, modly parity. */}
+            {/* 始终挂载：没有模型时的空状态（常驻地面网格 + 提示浮层）由
+                Viewer3D 内部渲染，与 modly 行为保持一致。 */}
             <Suspense fallback={<div className="gp-viewer__deferred" aria-hidden="true" />}>
               <Viewer3D url={meshUrl} light={light} />
             </Suspense>

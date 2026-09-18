@@ -120,64 +120,77 @@ body {
   color: var(--text-secondary);
 }
 
-.titlebar__ram {
+.titlebar__metrics {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar__metric {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   padding: 2px 10px;
   background: var(--bg-input);
   border: 1px solid var(--border-soft);
   border-radius: 999px;
-  -webkit-app-region: no-drag;
+  white-space: nowrap;
 }
 
-.titlebar__ramlabel {
+.titlebar__mlabel {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.8px;
   color: var(--text-faint);
+  text-transform: uppercase;
 }
 
-.titlebar__rambar {
-  width: 64px;
+.titlebar__mbar {
+  width: 54px;
   height: 4px;
   background: var(--bg-app);
   border-radius: 999px;
   overflow: hidden;
 }
 
-.titlebar__ramfill {
+.titlebar__mfill {
   display: block;
   height: 100%;
   border-radius: 999px;
+  background: var(--success-deep);
   transition: width 0.5s ease-out, background-color 0.3s;
 }
 
-.titlebar__rambar--ok {
-  background: var(--success-deep);
-}
-
-.titlebar__rambar--warn {
+.titlebar__bar--warn {
   background: var(--warning-solid);
 }
 
-.titlebar__rambar--high {
+.titlebar__bar--high {
   background: var(--danger-deep);
 }
 
-.titlebar__ramvalue {
+.titlebar__mvalue {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   font-family: var(--font-mono);
   color: var(--text-secondary);
 }
 
-.titlebar__ramtext--warn {
+.titlebar__val--warn {
   color: var(--warning-soft);
 }
 
-.titlebar__ramtext--high {
+.titlebar__val--high {
   color: var(--danger);
+}
+
+.titlebar__mextra {
+  margin-left: -2px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  color: var(--text-faint);
 }
 
 .titlebar__spacer {
@@ -364,5 +377,96 @@ button:disabled {
 .state--idle {
   background: var(--bg-hover);
   color: var(--text-muted);
+}
+
+/* ─── Toasts（全局非侵入式提示）────────────────────────────────────────────── */
+
+.t-stack {
+  position: fixed;
+  top: 50px;
+  right: 16px;
+  z-index: 9500;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(340px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.t-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px 9px 11px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-panel, #0c111d);
+  border: 1px solid var(--border, #1a2438);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  color: var(--text-bright, #dce6f3);
+  font-size: 12.5px;
+  line-height: 1.4;
+  animation: t-toast-in 0.18s ease-out;
+}
+
+@keyframes t-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.t-toast__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.t-toast--success .t-toast__icon { color: var(--success, #4ade80); }
+.t-toast--error .t-toast__icon { color: var(--danger, #f87171); }
+.t-toast--warning .t-toast__icon { color: var(--warning, #fbbf24); }
+.t-toast--info .t-toast__icon { color: var(--accent, #22d3ee); }
+
+.t-toast__msg {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.t-toast__action {
+  flex: none;
+  padding: 3px 9px;
+  border: 1px solid var(--border-strong, #384a70);
+  border-radius: var(--radius-sm, 5px);
+  background: transparent;
+  color: var(--accent, #22d3ee);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.t-toast__action:hover {
+  background: var(--accent-active, #0ca5c4);
+  border-color: var(--accent-active, #0ca5c4);
+  color: #fff;
+}
+
+.t-toast__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #8795b0);
+  cursor: pointer;
+}
+
+.t-toast__close:hover {
+  color: var(--text-bright, #dce6f3);
 }
 

@@ -1,3 +1,10 @@
+/**
+ * 工作流页面：应用内的可视化编程主界面。
+ *
+ * 顶层聚合标签页、工具栏、扩展面板与画布，并负责把子图编辑器、打开 / 帮助
+ * 弹窗叠加其上；运行态（暂停 / 单步）的工具条与全局快捷键也在此集中管理。
+ */
+
 import { useEffect, useState } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -5,12 +12,19 @@ import { useWorkflowsStore } from '../stores/workflows'
 import { useWorkflowRunStore } from '../stores/workflowRun'
 import { useNavigationStore } from '../stores/navigation'
 import { useLogsStore } from '../stores/logs'
-import ExtensionsPanel from './workflows/ExtensionsPanel'
-import OpenPopup from './workflows/OpenPopup'
+import { toast } from '../stores/toasts'
+import ExtensionsPanel from './workflows/extensionsPanel'
+import OpenPopup from './workflows/openPopup'
 import HelpModal from './workflows/HelpModal'
-import Canvas from './workflows/Canvas'
+import Canvas from './workflows/canvas'
+import SubgraphEditor from './workflows/subeditor'
+import { useSubEditorOpen } from './workflows/subEditorState'
 import { useT } from '../i18n'
 
+/**
+ * 工作流页面根组件。聚合标签页、工具栏、扩展面板与画布，并挂载
+ * 子图编辑器 / 打开 / 帮助三类叠加弹层；运行期工具条与全局快捷键在此统一处理。
+ */
 export default function WorkflowsPage() {
   const t = useT()
   const workflows = useWorkflowsStore((s) => s.workflows)
@@ -38,6 +52,10 @@ export default function WorkflowsPage() {
   const run = useWorkflowRunStore((s) => s.run)
   const cancel = useWorkflowRunStore((s) => s.cancel)
   const continueRun = useWorkflowRunStore((s) => s.continueRun)
+  const pause = useWorkflowRunStore((s) => s.pause)
+  const stepOver = useWorkflowRunStore((s) => s.stepOver)
+  // 子图编辑器打开时，页面级快捷键（含 Ctrl+Z）让位给编辑器自己的草稿历史。
+  const subEditorOpen = useSubEditorOpen()
 
   const go = useNavigationStore((s) => s.go)
 
@@ -45,12 +63,14 @@ export default function WorkflowsPage() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [dragOverTab, setDragOverTab] = useState<string | null>(null)
+  // 子图编辑器路径：进入 subgraphNode 时记录从根到当前层的 subgraph 节点 id 序列。
+  const [subEditorPath, setSubEditorPath] = useState<string[] | null>(null)
 
   const reorderTab = useWorkflowsStore((s) => s.reorderTab)
 
-  // Native-dialog workflow import — the main process opens the dialog, reads
-  // the JSON and returns its content (the sandboxed renderer has no fs access,
-  // and <input type=file> freezes this machine's renderer, see HANDOFF §6).
+  // 原生对话框导入工作流——主进程打开对话框、读取 JSON 并返回内容
+  // （沙箱化的渲染进程没有文件系统权限，且 <input type=file> 会冻住
+  // 这台机器的渲染进程，见 HANDOFF §6）。
   async function openImportPicker(): Promise<void> {
     if (!window.meshforge?.selectWorkflowFile) {
       useLogsStore.getState().warn('[workflows] native file dialog unavailable (browser-only run)')
@@ -64,8 +84,10 @@ export default function WorkflowsPage() {
         throw new Error('Not a valid workflow JSON')
       }
       await importWorkflow(parsed)
+      toast.success(t('workflows.importOk'))
     } catch (err) {
       useLogsStore.getState().error(`import workflow: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(t('workflows.importFail'))
     }
   }
 
@@ -73,7 +95,7 @@ export default function WorkflowsPage() {
     if (!loaded) void loadList()
   }, [loaded, loadList])
 
-  // Close the tab context menu on any outside click.
+  // 点击外部任意处时关闭标签页右键菜单。
   useEffect(() => {
     if (!tabMenu) return
     const close = (): void => setTabMenu(null)
@@ -81,9 +103,11 @@ export default function WorkflowsPage() {
     return () => window.removeEventListener('mousedown', close)
   }, [tabMenu])
 
-  // Tab + editing shortcuts.
+  // 标签页与编辑相关快捷键。
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      // 子图编辑器覆盖在主画布之上，它自己处理 Ctrl+Z / 方向键等，这里全部让位。
+      if (subEditorOpen) return
       const target = e.target as HTMLElement
       const typing =
         target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
@@ -121,7 +145,7 @@ export default function WorkflowsPage() {
         }
         return
       }
-      // Ctrl+W works even while typing (name field) — closing a tab is never a text edit.
+      // Ctrl+W 在输入（名称字段）时也要生效——关闭标签页永远不算文本编辑。
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'w') {
         e.preventDefault()
         if (current) void remove(current.id)
@@ -129,7 +153,7 @@ export default function WorkflowsPage() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [workflows, current, undo, redo, create, save, select, remove])
+  }, [workflows, current, undo, redo, create, save, select, remove, subEditorOpen])
 
   const busy = runState === 'running' || runState === 'paused'
   const activeLabel = activeNodeId
@@ -145,11 +169,12 @@ export default function WorkflowsPage() {
     a.download = `${current.name || 'workflow'}.json`
     a.click()
     URL.revokeObjectURL(url)
+    toast.success(t('workflows.exportOk'))
   }
 
   async function handleRun(): Promise<void> {
     if (!current) return
-    // Flush the pending autosave first so the run uses the latest graph.
+    // 先冲掉待写的自动保存，让运行用的是最新图。
     await save()
     await run(useWorkflowsStore.getState().current ?? current)
   }
@@ -233,7 +258,7 @@ export default function WorkflowsPage() {
         </button>
       </div>
 
-      {/* Tab context menu */}
+      {/* 标签页右键菜单 */}
       {tabMenu && (
         <div className="wf-ctxmenu" style={{ left: tabMenu.x, top: tabMenu.y }}>
           <button
@@ -346,17 +371,29 @@ export default function WorkflowsPage() {
                 </span>
               )}
               {runState === 'paused' && (
-                <button className="primary" onClick={continueRun}>
-                  {t('workflows.toolbar.continue')}
-                </button>
+                <>
+                  <button className="primary" onClick={continueRun}>
+                    {t('workflows.toolbar.continue')}
+                  </button>
+                  <button className="wf-tool-btn" title={t('workflows.toolbar.step')} onClick={stepOver}>
+                    {t('workflows.toolbar.step')}
+                  </button>
+                </>
               )}
               {busy ? (
-                <button className="wf-stop-btn" onClick={() => void cancel()}>
-                  <svg aria-hidden="true" width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="4" y="4" width="16" height="16" rx="1.5" />
-                  </svg>
-                  {t('workflows.toolbar.stop')}
-                </button>
+                <>
+                  {runState === 'running' && (
+                    <button className="wf-tool-btn" title={t('workflows.toolbar.pause')} onClick={pause}>
+                      {t('workflows.toolbar.pause')}
+                    </button>
+                  )}
+                  <button className="wf-stop-btn" onClick={() => void cancel()}>
+                    <svg aria-hidden="true" width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="4" y="4" width="16" height="16" rx="1.5" />
+                    </svg>
+                    {t('workflows.toolbar.stop')}
+                  </button>
+                </>
               ) : (
                 <>
                   <button
@@ -395,17 +432,27 @@ export default function WorkflowsPage() {
 
           {current ? (
             <ReactFlowProvider key={current.id}>
-              <Canvas />
+              <Canvas
+                onOpenSubgraph={(id) => setSubEditorPath([id])}
+              />
             </ReactFlowProvider>
           ) : (
             <div className="wf-empty">{t('workflows.loading')}</div>
           )}
         </div>
-        <ExtensionsPanel />
+        <ExtensionsPanel onOpenFunction={(p) => setSubEditorPath(p.length > 0 ? p : null)} />
       </div>
 
       {openPopupVisible && <OpenPopup onClose={() => setOpenPopupVisible(false)} />}
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+      {subEditorPath && (
+        <SubgraphEditor
+          path={subEditorPath}
+          onClose={() => setSubEditorPath(null)}
+          onDescend={(innerId) => setSubEditorPath((p) => [...(p ?? []), innerId])}
+          onJump={(p) => setSubEditorPath(p.length > 0 ? p : null)}
+        />
+      )}
     </div>
   )
 }

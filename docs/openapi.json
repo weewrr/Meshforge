@@ -1,0 +1,2348 @@
+{
+  "components": {
+    "schemas": {
+      "ActionDone": {
+        "description": "一次已完成的工具调用记录（回传给前端渲染动作卡片）。",
+        "properties": {
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "result": {
+            "title": "Result",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool",
+          "result"
+        ],
+        "title": "ActionDone",
+        "type": "object"
+      },
+      "AgentChatRequest": {
+        "description": "Agent 对话请求体。",
+        "properties": {
+          "api_key": {
+            "default": "",
+            "title": "Api Key",
+            "type": "string"
+          },
+          "base_url": {
+            "default": "",
+            "title": "Base Url",
+            "type": "string"
+          },
+          "context": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Context",
+            "type": "object"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "model": {
+            "default": "qwen2.5:3b",
+            "title": "Model",
+            "type": "string"
+          },
+          "ollama_url": {
+            "default": "http://localhost:11434",
+            "title": "Ollama Url",
+            "type": "string"
+          },
+          "provider": {
+            "default": "ollama",
+            "title": "Provider",
+            "type": "string"
+          },
+          "thinking": {
+            "default": "auto",
+            "title": "Thinking",
+            "type": "string"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "title": "AgentChatRequest",
+        "type": "object"
+      },
+      "AgentChatResponse": {
+        "description": "Agent 对话响应体。",
+        "properties": {
+          "actions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ActionDone"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "thinking": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "AgentChatResponse",
+        "type": "object"
+      },
+      "Body_generate_from_image_generate_from_image_post": {
+        "properties": {
+          "back": {
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Back"
+          },
+          "front": {
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Front"
+          },
+          "generator_id": {
+            "default": "hunyuan3d-2-mini",
+            "title": "Generator Id",
+            "type": "string"
+          },
+          "image": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Image",
+            "type": "string"
+          },
+          "left": {
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Left"
+          },
+          "params_json": {
+            "default": "{}",
+            "title": "Params Json",
+            "type": "string"
+          },
+          "right": {
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Right"
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "title": "Body_generate_from_image_generate_from_image_post",
+        "type": "object"
+      },
+      "Body_install_from_local_extensions_install_local_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "root_dir": {
+            "default": "",
+            "title": "Root Dir",
+            "type": "string"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "Body_install_from_local_extensions_install_local_post",
+        "type": "object"
+      },
+      "Body_upload_file_upload_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_file_upload_post",
+        "type": "object"
+      },
+      "ChatMessage": {
+        "description": "一条对话消息。",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "images": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Images",
+            "type": "array"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage",
+        "type": "object"
+      },
+      "DownloadControlBody": {
+        "description": "暂停 / 取消请求体。",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "DownloadControlBody",
+        "type": "object"
+      },
+      "GpuDetectOut": {
+        "description": "启动时探测到的 NVIDIA GPU 信息（优化文档 6.3 自动探测降级）。",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "cudaAvailable": {
+            "title": "Cudaavailable",
+            "type": "boolean"
+          },
+          "names": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cudaAvailable",
+          "count"
+        ],
+        "title": "GpuDetectOut",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthOut": {
+        "description": "GET /health 与 /health/live。",
+        "properties": {
+          "app": {
+            "title": "App",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "app"
+        ],
+        "title": "HealthOut",
+        "type": "object"
+      },
+      "HealthStatusOut": {
+        "description": "GET /health/status（需认证）的详细诊断。",
+        "properties": {
+          "app": {
+            "title": "App",
+            "type": "string"
+          },
+          "dataDir": {
+            "title": "Datadir",
+            "type": "string"
+          },
+          "generatorCount": {
+            "title": "Generatorcount",
+            "type": "integer"
+          },
+          "modelsDir": {
+            "title": "Modelsdir",
+            "type": "string"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tokenConfigured": {
+            "title": "Tokenconfigured",
+            "type": "boolean"
+          },
+          "uptimeSeconds": {
+            "title": "Uptimeseconds",
+            "type": "number"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "workspaceDir": {
+            "title": "Workspacedir",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "app",
+          "version",
+          "uptimeSeconds",
+          "port",
+          "dataDir",
+          "workspaceDir",
+          "modelsDir",
+          "generatorCount",
+          "tokenConfigured"
+        ],
+        "title": "HealthStatusOut",
+        "type": "object"
+      },
+      "ImportByPathRequest": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ImportByPathRequest",
+        "type": "object"
+      },
+      "InstallDirBody": {
+        "description": "从本地目录路径安装扩展的请求体。",
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "InstallDirBody",
+        "type": "object"
+      },
+      "InstallUrlBody": {
+        "description": "从 URL 安装扩展的请求体。",
+        "properties": {
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "InstallUrlBody",
+        "type": "object"
+      },
+      "JobStatusOut": {
+        "description": "GET /generate/jobs/{id}；历史回退时 historical=True。",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "historical": {
+            "default": false,
+            "title": "Historical",
+            "type": "boolean"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "progress": {
+            "title": "Progress",
+            "type": "number"
+          },
+          "result_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Url"
+          },
+          "state": {
+            "description": "pending | running | succeeded | failed | cancelled",
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "state",
+          "progress",
+          "message"
+        ],
+        "title": "JobStatusOut",
+        "type": "object"
+      },
+      "LibraryEntry": {
+        "description": "单条资产条目（url 指向 /files 静态挂载）。",
+        "properties": {
+          "capability": {
+            "title": "Capability",
+            "type": "string"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "nonOpenableReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nonopenablereason"
+          },
+          "openable": {
+            "title": "Openable",
+            "type": "boolean"
+          },
+          "previewKind": {
+            "title": "Previewkind",
+            "type": "string"
+          },
+          "sourceScope": {
+            "title": "Sourcescope",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "workspacePath": {
+            "title": "Workspacepath",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspacePath",
+          "displayName",
+          "sourceScope",
+          "capability",
+          "state",
+          "previewKind",
+          "openable",
+          "createdAt",
+          "updatedAt",
+          "url"
+        ],
+        "title": "LibraryEntry",
+        "type": "object"
+      },
+      "LibraryOut": {
+        "description": "GET /library 的分页响应。",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/LibraryEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "success",
+          "total",
+          "offset",
+          "limit",
+          "entries"
+        ],
+        "title": "LibraryOut",
+        "type": "object"
+      },
+      "ProcessRequest": {
+        "properties": {
+          "extension_id": {
+            "title": "Extension Id",
+            "type": "string"
+          },
+          "mesh_url": {
+            "title": "Mesh Url",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "required": [
+          "mesh_url",
+          "extension_id"
+        ],
+        "title": "ProcessRequest",
+        "type": "object"
+      },
+      "ReadyOut": {
+        "description": "GET /health/ready；not-ready 时附 detail。",
+        "properties": {
+          "app": {
+            "title": "App",
+            "type": "string"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "app"
+        ],
+        "title": "ReadyOut",
+        "type": "object"
+      },
+      "RuntimeOut": {
+        "description": "GET /settings/runtime —— 后端实际生效配置与未接线标记。",
+        "properties": {
+          "dataDir": {
+            "title": "Datadir",
+            "type": "string"
+          },
+          "extensionsDir": {
+            "title": "Extensionsdir",
+            "type": "string"
+          },
+          "gpu": {
+            "$ref": "#/components/schemas/GpuDetectOut"
+          },
+          "maxConcurrentPerModel": {
+            "title": "Maxconcurrentpermodel",
+            "type": "integer"
+          },
+          "modelsDir": {
+            "title": "Modelsdir",
+            "type": "string"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer"
+          },
+          "wired": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Wired",
+            "type": "object"
+          },
+          "workflowsDir": {
+            "title": "Workflowsdir",
+            "type": "string"
+          },
+          "workspaceDir": {
+            "title": "Workspacedir",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataDir",
+          "workspaceDir",
+          "workflowsDir",
+          "modelsDir",
+          "extensionsDir",
+          "port",
+          "maxConcurrentPerModel",
+          "wired",
+          "gpu"
+        ],
+        "title": "RuntimeOut",
+        "type": "object"
+      },
+      "UninstallBody": {
+        "description": "卸载扩展的请求体。",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "UninstallBody",
+        "type": "object"
+      },
+      "UploadFromPathRequest": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "UploadFromPathRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WorkflowIn": {
+        "description": "保存工作流时的请求体。\n\n`nodes` / `edges` 保持为宽松的 dict 列表——图结构由前端自由演化，\n后端不参与其 schema 校验，避免每次加节点类型都要改服务端。",
+        "properties": {
+          "bookmarked": {
+            "default": false,
+            "title": "Bookmarked",
+            "type": "boolean"
+          },
+          "createdAt": {
+            "default": "",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "edges": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "default": "Workflow",
+            "maxLength": 120,
+            "title": "Name",
+            "type": "string"
+          },
+          "nodes": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "updatedAt": {
+            "default": "",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "WorkflowIn",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Meshforge API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/agent/chat": {
+      "post": {
+        "description": "POST /chat — 跑完整的工具调用循环，直到模型给出最终答复或轮次耗尽。\n\nArgs:\n    request: 对话请求（含 provider / 模型 / 历史消息 / 场景上下文）。\n\nReturns:\n    `AgentChatResponse`：最终文本 + 已执行的动作列表 + 合并后的思维链。",
+        "operationId": "agent_chat_agent_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentChatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Agent Chat",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/agent/models": {
+      "get": {
+        "description": "列出某个 provider 下可用的模型。\n\n* provider='openai'：GET {base_url}/models，带 Bearer key（尽力而为）。\n* provider='ollama'：查询 Ollama 的 /api/tags（为兼容保留）。\n\nReturns:\n    `{'models': [...]}`；任何失败都静默返回空列表（前端只用来填下拉框）。",
+        "operationId": "list_models_agent_models_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "default": "ollama",
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "base_url",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Base Url",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "api_key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Api Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ollama_url",
+            "required": false,
+            "schema": {
+              "default": "http://localhost:11434",
+              "title": "Ollama Url",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Models Agent Models Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Models",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/diagnostics/bundle": {
+      "get": {
+        "description": "GET /diagnostics/bundle — 导出诊断 zip（需 Bearer token）。\n\n内容：\n- `meta.json`：环境元信息；\n- `recent-jobs.json`：最近 100 条任务终态（SQLite jobstore）；\n- `recent-logs.txt`：最近 500 条日志（进程内环形缓冲）。",
+        "operationId": "diagnostics_bundle_diagnostics_bundle_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Diagnostics Bundle",
+        "tags": [
+          "diagnostics"
+        ]
+      }
+    },
+    "/extensions": {
+      "get": {
+        "description": "列出全部 schema 驱动的扩展。\n\n包含内置模型生成器 + 内置处理工具 + extensions/ 目录下发现的 manifest 扩展。\n\nReturns:\n    扩展描述字典列表（id / display_name / kind / input / output /\n    category / params，manifest 扩展还会带上 HF 下载相关字段）。",
+        "operationId": "list_extensions_extensions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Extensions Extensions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Extensions",
+        "tags": [
+          "extensions"
+        ]
+      }
+    },
+    "/extensions/": {
+      "get": {
+        "description": "列出全部 schema 驱动的扩展。\n\n包含内置模型生成器 + 内置处理工具 + extensions/ 目录下发现的 manifest 扩展。\n\nReturns:\n    扩展描述字典列表（id / display_name / kind / input / output /\n    category / params，manifest 扩展还会带上 HF 下载相关字段）。",
+        "operationId": "list_extensions_extensions__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Extensions Extensions  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Extensions",
+        "tags": [
+          "extensions"
+        ]
+      }
+    },
+    "/extensions/install": {
+      "post": {
+        "description": "从 GitHub / HuggingFace / ModelScope 仓库 URL 安装扩展。\n\n下载阶段按 URL 主机名分流，但三种来源最终都会落到同一个暂存目录，\n再由同一个 `_install_from_folder` 校验并落盘。\n\nArgs:\n    body: `{'url': ...}`。\n\nReturns:\n    `{'ok': True, 'message': 'install started'}`（下载在后台任务里进行）。\n\nRaises:\n    HTTPException: URL 非法或无法识别来源（400）。",
+        "operationId": "install_extension_extensions_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallUrlBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Install Extension Extensions Install Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Install Extension",
+        "tags": [
+          "extensions"
+        ]
+      }
+    },
+    "/extensions/install-dir": {
+      "post": {
+        "description": "直接从本地目录路径安装扩展。\n\n路径来自主进程的原生目录选择对话框（fs:selectFolder）：渲染进程里的\nwebkitdirectory <input type=file> 会把本机 Chromium 卡死/崩溃\n（mesh/image 选择器也是同一根因 —— 见 19e/19f/19h），所以渲染进程从不\n接触这些文件。后端在服务端复制整棵目录树，然后复用与 /install-local\n完全一致的校验 + 安装路径：manifest.json + generator.py/processor.py，\n拷贝到 extensions/<id>/，重扫，加载失败则回滚。\n\nArgs:\n    body: `{'path': 本地目录绝对路径}`。\n\nRaises:\n    HTTPException: 目录不存在（400）、选了 meshforge 内部目录（400）、\n        目录过大（400）、目录不可读（400）。",
+        "operationId": "install_from_dir_extensions_install_dir_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallDirBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Install From Dir Extensions Install Dir Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Install From Dir",
+        "tags": [
+          "extensions"
+        ]
+      }
+    },
+    "/extensions/install-local": {
+      "post": {
+        "description": "从上传的本地目录安装扩展（webkitdirectory 输入）。\n\n浏览器会把每个文件连同其相对路径一起发来；这里在 extensions/<id>/ 下\n重建目录结构后重扫。所选根目录之外的文件会被忽略。\n\nArgs:\n    files: multipart 上传的文件列表（filename 携带相对路径）。\n    root_dir: 浏览器给出的根目录名（作为暂存目录名使用）。\n\nRaises:\n    HTTPException: 没有任何文件上传（400）。",
+        "operationId": "install_from_local_extensions_install_local_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_install_from_local_extensions_install_local_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Install From Local Extensions Install Local Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Install From Local",
+        "tags": [
+          "extensions"
+        ]
+      }
+    },
+    "/extensions/install/status": {
+      "get": {
+        "description": "GET /install/status — 返回安装进度槽（前端轮询用）。",
+        "operationId": "install_status_extensions_install_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Install Status Extensions Install Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Install Status",
+        "tags": [
+          "extensions"
+        ]
+      }
+    },
+    "/extensions/reload": {
+      "post": {
+        "description": "重新扫描扩展目录并重载注册表（无需重启服务）。\n\nReturns:\n    `{'reloaded': True, 'models': [...], 'errors': {...}}`；errors 为\n    扫描中加载失败的扩展及其原因。",
+        "operationId": "reload_extensions_extensions_reload_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reload Extensions Extensions Reload Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Reload Extensions",
+        "tags": [
+          "extensions"
+        ]
+      }
+    },
+    "/extensions/uninstall": {
+      "post": {
+        "description": "删除扩展目录（若存在）并从注册表注销。\n\nReturns:\n    `{'ok': True, 'removed': 是否真的删掉了目录, 'id': ...}`。",
+        "operationId": "uninstall_extension_extensions_uninstall_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UninstallBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Uninstall Extension Extensions Uninstall Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Uninstall Extension",
+        "tags": [
+          "extensions"
+        ]
+      }
+    },
+    "/files/list-dir": {
+      "get": {
+        "description": "List files under a workspace subdirectory (For Each iterator support).",
+        "operationId": "list_dir_files_list_dir_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Dir",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ext",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Ext",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Dir Files List Dir Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Dir",
+        "tags": [
+          "generate"
+        ]
+      }
+    },
+    "/generate/from-image": {
+      "post": {
+        "description": "POST /generate/from-image：提交一次图片转 3D 生成任务。\n\n接收主图片与可选的四视图输入，创建后台任务并返回 `job_id`，\n前端据此轮询 `/generate/jobs/{job_id}` 获取进度。",
+        "operationId": "generate_from_image_generate_from_image_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_generate_from_image_generate_from_image_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Generate From Image Generate From Image Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate From Image",
+        "tags": [
+          "generate"
+        ]
+      }
+    },
+    "/generate/jobs/{job_id}": {
+      "get": {
+        "operationId": "job_status_generate_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Job Status",
+        "tags": [
+          "generate"
+        ]
+      }
+    },
+    "/generate/jobs/{job_id}/cancel": {
+      "post": {
+        "description": "POST /generate/jobs/{job_id}/cancel：请求协作式取消一个生成任务。",
+        "operationId": "cancel_job_generate_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cancel Job Generate Jobs  Job Id  Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Job",
+        "tags": [
+          "generate"
+        ]
+      }
+    },
+    "/generators": {
+      "get": {
+        "operationId": "list_generators_generators_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Generators Generators Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Generators",
+        "tags": [
+          "generate"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "存活探针（GET /health 或 /health/live）：进程在即返回 200。",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/health/live": {
+      "get": {
+        "description": "存活探针（GET /health 或 /health/live）：进程在即返回 200。",
+        "operationId": "health_health_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "description": "就绪探针（GET /health/ready）：数据目录可写才返回 200，否则 503。\n\n用一次性探针文件验证写权限——目录不可写时（磁盘满 / 权限被收回 /\n杀软锁定）后端看似存活但一切写入都会失败，就绪探针据此提前暴露。",
+        "operationId": "health_ready_health_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Ready"
+      }
+    },
+    "/health/status": {
+      "get": {
+        "description": "详细诊断（GET /health/status，需 Bearer token）。\n\n返回版本 / 运行时长 / 实际端口 / 数据目录布局 / 已注册生成器数，\n供设置页与诊断包导出使用；不公开（含本机路径）。",
+        "operationId": "health_status_health_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Status"
+      }
+    },
+    "/library": {
+      "get": {
+        "description": "GET /library — 分页列出 workspace 下可索引的资产。\n\nArgs:\n    offset: 起始下标（默认 0）。\n    limit: 单页条数，默认 200，上限 1000；传 0 表示不限（老客户端兼容）。\n\nReturns:\n    `{'success': True, 'total': N, 'offset': o, 'limit': l, 'entries': [...]}`；\n    entries 按路径排序，保证顺序稳定。",
+        "operationId": "list_library_library_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Library",
+        "tags": [
+          "library"
+        ]
+      }
+    },
+    "/model/hf-download": {
+      "get": {
+        "description": "以 SSE 流式下载一个 HuggingFace Hub 模型。\n\n下载到 MODELS_DIR / model_id，并按扩展 manifest 里声明的过滤规则执行\n（hf_skip_prefixes / hf_include_prefixes）。\n\nSSE 数据事件：{\"percent\": 0-100, \"file\": \"...\", \"status\": \"...\"}\n终止事件：done / paused / cancelled / error\n\nArgs:\n    repo_id: HF 仓库 id（'owner/repo'）；必须与扩展 manifest 声明的\n        hfRepo 一致，未声明或不相符的仓库一律拒绝下载。\n    model_id: 扩展 id，决定落盘目录。\n    skip_prefixes: JSON 数组字符串，覆盖 manifest 里的排除前缀。\n    include_prefixes: JSON 数组字符串，覆盖 manifest 里的包含前缀。\n    x_hf_token: `X-HF-Token` 请求头（FastAPI 注入）——HF token 不再走\n        URL query，避免进入访问日志 / 浏览器历史 / 代理日志（文档 12.6 / 13.3）。",
+        "operationId": "hf_download_model_hf_download_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "repo_id",
+            "required": true,
+            "schema": {
+              "title": "Repo Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "skip_prefixes",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Skip Prefixes"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_prefixes",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include Prefixes"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-HF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hf Download",
+        "tags": [
+          "model"
+        ]
+      }
+    },
+    "/model/hf-download/cancel": {
+      "post": {
+        "description": "取消指定模型的下载（流侧会顺带清掉 .part 文件）。",
+        "operationId": "cancel_hf_download_model_hf_download_cancel_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DownloadControlBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cancel Hf Download Model Hf Download Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Hf Download",
+        "tags": [
+          "model"
+        ]
+      }
+    },
+    "/model/hf-download/pause": {
+      "post": {
+        "description": "暂停指定模型的下载。\n\n只是置位 Event；实际的暂停发生在下载线程下一次检查控制信号时。\n因此 .part 文件与进度都会保留，可后续续传。",
+        "operationId": "pause_hf_download_model_hf_download_pause_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DownloadControlBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Pause Hf Download Model Hf Download Pause Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause Hf Download",
+        "tags": [
+          "model"
+        ]
+      }
+    },
+    "/model/status": {
+      "get": {
+        "description": "每个声明了 HF 仓库的模型扩展的下载状态。\n\n前端按扩展 id 合并这份数据，用来显示 安装 / 已安装 / 下载进度。\n`sizeBytes` 是模型目录的磁盘占用（尚未下载任何东西时为 0）。\n\nReturns:\n    `{'models': [{extId, repoId, skipPrefixes, includePrefixes,\n    downloaded, sizeBytes}, ...]}`。",
+        "operationId": "model_status_model_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Model Status Model Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Model Status",
+        "tags": [
+          "model"
+        ]
+      }
+    },
+    "/optimize/import-by-path": {
+      "post": {
+        "operationId": "import_mesh_by_path_optimize_import_by_path_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportByPathRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Import Mesh By Path Optimize Import By Path Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Mesh By Path",
+        "tags": [
+          "generate"
+        ]
+      }
+    },
+    "/optimize/serve-file": {
+      "get": {
+        "description": "GET /optimize/serve-file：把 .glb 以正确的 MIME 类型返回。\n\n安全边界：仅允许 workspace 内的文件，或本应用创建的\nmeshforge_import_* 临时转换目录内的文件；其余任意路径一律 403。\n（resolve + relative_to 归属校验，避免字符串前缀被兄弟目录骗过。）",
+        "operationId": "serve_imported_file_optimize_serve_file_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Serve Imported File",
+        "tags": [
+          "generate"
+        ]
+      }
+    },
+    "/process/mesh": {
+      "post": {
+        "operationId": "process_mesh_process_mesh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Process Mesh Process Mesh Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Process Mesh",
+        "tags": [
+          "process"
+        ]
+      }
+    },
+    "/settings/clear-cache": {
+      "post": {
+        "description": "Delete temporary caches; report what was removed.",
+        "operationId": "clear_cache_settings_clear_cache_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Clear Cache Settings Clear Cache Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Clear Cache",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/clear-generated": {
+      "post": {
+        "description": "Delete generated model outputs (workspace/<job>/model.glb and siblings).\n\nKeeps uploads, invocation payloads and workflow metadata — only the per-job\noutput directory (everything produced under workspace/<job>) is removed.",
+        "operationId": "clear_generated_settings_clear_generated_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Clear Generated Settings Clear Generated Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Clear Generated",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/clear-workflows": {
+      "post": {
+        "description": "Delete all saved workflows (workspace/workflows/*.json).\n\nKeeps uploads, cache and generated outputs untouched — only the persisted\nworkflow definitions are removed.",
+        "operationId": "clear_workflows_settings_clear_workflows_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Clear Workflows Settings Clear Workflows Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Clear Workflows",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/open-cache-folder": {
+      "post": {
+        "description": "Reveal the cache (uploads) directory in the OS file manager.",
+        "operationId": "open_cache_folder_settings_open_cache_folder_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Open Cache Folder Settings Open Cache Folder Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Open Cache Folder",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/runtime": {
+      "get": {
+        "description": "GET /settings/runtime — 后端运行时真实生效配置（优化文档 13.2 设置契约）。\n\n前端设置页据此展示\"实际生效\"的目录与端口，而不是 localStorage 里\n可能已经失真的副本；`wired` 明确标出哪些前端设置项后端尚未接线，\n避免用户误以为改动已生效。",
+        "operationId": "runtime_info_settings_runtime_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Runtime Info",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/system/stats": {
+      "get": {
+        "description": "GET /system/stats — 一次性返回 CPU / 内存 / GPU 指标（≤2s 缓存）。\n\nReturns:\n    `{'cpuPercent': float|None, 'memory': {...}, 'gpu': {...}|None}`。",
+        "operationId": "system_stats_system_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response System Stats System Stats Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "System Stats",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/upload": {
+      "post": {
+        "description": "通用资源上传，供节点内嵌文件（图片、网格）使用。",
+        "operationId": "upload_file_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_file_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload File Upload Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload File",
+        "tags": [
+          "generate"
+        ]
+      }
+    },
+    "/upload/from-path": {
+      "post": {
+        "description": "POST /upload/from-path：按绝对路径把磁盘图片导入 workspace/uploads。\n\n绕开渲染进程的文件选择，复制后的 URL 与普通上传完全一致。",
+        "operationId": "import_image_by_path_upload_from_path_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadFromPathRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Import Image By Path Upload From Path Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Image By Path",
+        "tags": [
+          "generate"
+        ]
+      }
+    },
+    "/workflows": {
+      "get": {
+        "description": "GET /workflows — 列出全部工作流摘要（不含 nodes/edges）。\n\nReturns:\n    按 `updatedAt` 倒序排列的摘要列表；损坏或缺少 id 的文件被静默跳过。",
+        "operationId": "list_workflows_workflows_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Workflows Workflows Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Workflows",
+        "tags": [
+          "workflows"
+        ]
+      },
+      "post": {
+        "description": "POST /workflows — 整体覆盖保存一个工作流（upsert 语义）。\n\n原子写入（文档 4.2）：先写同目录临时文件，flush + fsync 落盘后用\n`os.replace` 原子替换目标——进程中断最多留下一个临时文件，\n主文件永远要么是旧的完整 JSON，要么是新的完整 JSON。\n\n`ensure_ascii=False` 让中文名称以原字符落盘；`indent=2` 便于人工查看与 diff。",
+        "operationId": "save_workflow_workflows_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Save Workflow Workflows Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Workflow",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/workflows/{workflow_id}": {
+      "delete": {
+        "description": "DELETE /workflows/{id} — 删除工作流文件。\n\n幂等：文件本就不存在时同样返回成功，方便前端做\"删除后刷新\"。",
+        "operationId": "delete_workflow_workflows__workflow_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "schema": {
+              "title": "Workflow Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Workflow Workflows  Workflow Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Workflow",
+        "tags": [
+          "workflows"
+        ]
+      },
+      "get": {
+        "description": "GET /workflows/{id} — 读取单个工作流的完整定义（含 nodes/edges）。\n\nRaises:\n    HTTPException: id 非法（400）或文件不存在（404）。",
+        "operationId": "get_workflow_workflows__workflow_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "schema": {
+              "title": "Workflow Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Workflow Workflows  Workflow Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Workflow",
+        "tags": [
+          "workflows"
+        ]
+      }
+    }
+  }
+}

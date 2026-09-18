@@ -1,10 +1,10 @@
 """Generator contract for Meshforge.
 
 A generator owns exactly one model (or pipeline stage). Implementations must:
-  * run all heavy work inside ``generate`` (it is called from a worker thread),
-  * report progress via the ``progress`` callback,
-  * poll ``cancel`` between stages and raise ``GenerationCancelled``,
-  * write a ``.glb`` into ``out_dir`` and return its path.
+  * 把全部重活放在 ``generate`` 里（它由工作线程调用），
+  * 经 ``progress`` 回调上报进度，
+  * 在阶段间轮询 ``cancel`` 并抛出 ``GenerationCancelled``，
+  * 把 ``.glb`` 写入 ``out_dir`` 并返回其路径。
 """
 
 import threading
@@ -24,6 +24,9 @@ class BaseGenerator(ABC):
     display_name: str = 'Base Generator'
     input_type: str = 'image'
     output_type: str = 'mesh'
+    # 类别：区分「图→网格」生成建模模型（mesh）与「图→多视图图」生视图模型
+    # （multiview）。前端据此把两类生成器分开展示，jobs 层也据此返回不同产物。
+    category: str = 'mesh'
     params: list[dict] = []  # ParamSchema list, drives the node UI
 
     def __init__(self) -> None:
@@ -40,7 +43,7 @@ class BaseGenerator(ABC):
             progress(1.0, 'loaded')
 
     def unload(self) -> None:
-        """Free device memory. Override if needed."""
+        """释放设备显存/内存。需要自定义卸载逻辑时重写。"""
         self._loaded = False
 
     @abstractmethod
@@ -52,5 +55,16 @@ class BaseGenerator(ABC):
         progress: ProgressFn,
         cancel: threading.Event,
     ) -> Path:
-        """Run inference on the input image, write a .glb into out_dir, return its path."""
+        """对输入图片跑推理，把 `.glb` 写入 `out_dir` 并返回其路径。
+
+        Args:
+            image_path: 输入图片路径。
+            out_dir: 产物输出目录（`.glb` 落盘处）。
+            params: 前端节点下发的参数字典。
+            progress: 进度回调 `(比例, 文案)`，供前端轮询展示。
+            cancel: 取消事件，各阶段间轮询；置位时抛 `GenerationCancelled`。
+
+        Returns:
+            生成的 `.glb` 文件路径。
+        """
         raise NotImplementedError

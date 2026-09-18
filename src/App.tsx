@@ -1,19 +1,29 @@
+/**
+ * 应用外壳：标题栏 + 侧边栏 + 路由分派，以及两处崩溃兜底。
+ *
+ * 四个页面都经 `lazy` 懒加载——three.js 与 React Flow 是体积最大的两个依赖，
+ * 静态 import 会让首屏解析体积翻倍。`ErrorBoundary` 与崩溃恢复横幅共同保证
+ * "单个资源解析失败"或"渲染进程被系统回收"不会表现为白屏或静默回到首页。
+ */
+
 import { lazy, Suspense, useEffect, useState } from 'react'
 import ErrorBoundary, { type ErrorBoundaryFallbackProps } from './components/ErrorBoundary'
 import { Sidebar, TitleBar } from './components/Chrome'
+import { Toasts } from './components/Toasts'
 import { useT } from './i18n'
 import { useAppStore } from './stores/app'
 import { useLogsStore } from './stores/logs'
 import { useNavigationStore } from './stores/navigation'
 
-// Route-level code splitting: three.js (Viewer3D inside GeneratePage) and
-// React Flow (WorkflowsPage) are the heavy dependencies — lazy loading keeps
-// the initial parse small and splits them into their own chunks.
+// 路由级代码分割：three.js（GeneratePage 内的 Viewer3D）与 React Flow
+// （WorkflowsPage）是最大的两个依赖，懒加载让首屏解析保持轻量，
+// 并把它们各自拆成独立 chunk。
 const GeneratePage = lazy(() => import('./pages/GeneratePage'))
 const ModelsPage = lazy(() => import('./pages/ModelsPage'))
-const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const SettingsPage = lazy(() => import('./pages/settings'))
 const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage'))
 
+/** 顶层崩溃时替换整个界面的兜底页（带"重载"与"重试"两个出口）。 */
 function AppCrash({ error, reset }: ErrorBoundaryFallbackProps) {
   const t = useT()
   return (
@@ -33,33 +43,33 @@ function AppCrash({ error, reset }: ErrorBoundaryFallbackProps) {
   )
 }
 
+/** 应用根组件：按 `navigation` store 的当前页渲染对应页面。 */
 export default function App() {
   const page = useNavigationStore((s) => s.page)
   const [crash, setCrash] = useState<{ reason: string; at: number } | null>(null)
   const t = useT()
 
-  // The store applies persisted UI attrs (theme/font/zoom) at module init,
-  // but in environments where localStorage settles after module eval (e.g.
-  // embedded browsers) that first pass can read defaults. Re-apply once React
-  // is up so <html> always matches the hydrated store.
+  // store 在模块初始化时就已套用持久化的 UI 属性（主题/字号/缩放），
+  // 但在 localStorage 晚于模块求值才就绪的环境里（例如内嵌浏览器），
+  // 那一次会读到默认值。这里在 React 启动后再套用一次，
+  // 保证 <html> 上的类名始终与已水合的 store 一致。
   useEffect(() => {
     useAppStore.getState().applyUi()
   }, [])
 
-  // Crash recovery banner: the main process auto-reloads the renderer after a
-  // render-process-gone / unresponsive event and stashes the reason. We ask
-  // once on mount (one-shot, cleared by the main process) and surface it so a
-  // reload never looks like a silent "jumped back to home". Navigation and the
-  // open workflow tab are restored from localStorage elsewhere, so the banner
-  // doubles as a hint that the restore just happened.
+  // 崩溃恢复横幅：主进程在 render-process-gone / unresponsive 后会自动重载
+  // 渲染进程，并把原因暂存下来。挂载时**只问一次**（一次性读取，主进程读完即清），
+  // 拿到就展示——否则重载会看起来像"莫名其妙跳回了首页"。
+  // 导航状态与打开的工作流标签页由别处的 localStorage 恢复，
+  // 因此这条横幅同时也提示"刚才发生过一次恢复"。
   useEffect(() => {
     let cancelled = false
     void window.meshforge
       ?.getLastCrash()
       .then((last) => {
         if (cancelled || !last) return
-        // Stale guard: if the window was closed before the auto-reload and
-        // relaunched later, ignore an old crash record.
+        // 过期保护：若窗口在自动重载前就被关闭、之后很久才重新打开，
+        // 则忽略这条陈旧的崩溃记录。
         if (Date.now() - last.at > 60_000) return
         setCrash(last)
         useLogsStore.getState().error(`[crash-recovery] ${last.reason}`)
@@ -109,6 +119,7 @@ export default function App() {
           </ErrorBoundary>
         </div>
       </div>
+      <Toasts />
     </div>
   )
 }

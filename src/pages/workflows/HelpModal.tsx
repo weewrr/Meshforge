@@ -1,6 +1,13 @@
+/**
+ * 工作流编辑器的快捷键 / 交互帮助弹窗。
+ *
+ * 以"按键 — 说明"两列表格呈现画布的全部快捷键与交互方式，
+ * 点击遮罩或"知道了"按钮即可关闭。
+ */
+
 import { useT } from '../../i18n'
 
-/** Keyboard shortcuts / interaction help modal for the workflow editor. */
+/** 工作流编辑器快捷键 / 交互帮助弹窗。 */
 export default function HelpModal({ onClose }: { onClose: () => void }) {
   const t = useT()
   const rows: [string, string][] = [

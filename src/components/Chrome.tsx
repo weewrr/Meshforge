@@ -1,8 +1,21 @@
+/**
+ * 应用框架件：左侧导航栏与顶部标题栏。
+ *
+ * 标题栏承担两件事——品牌标识，以及**可选的实时资源监视**（CPU / 内存 /
+ * 显存 / GPU 利用率）。四个监视项各自可开关，只有至少一项开启时才启动轮询，
+ * 关闭时立刻停止并清空数据，避免后台白跑。
+ *
+ * 窗口按钮（最小化 / 最大化 / 关闭）走 `window.meshforge` 的 preload 桥；
+ * 在嵌入式浏览器里该对象不存在，故一律用可选链调用。
+ */
+
 import { useEffect, useState, type ReactElement } from 'react'
 import { useNavigationStore, type Page } from '../stores/navigation'
 import { useAppStore } from '../stores/app'
 import { useT } from '../i18n'
+import { getSystemStats } from '../api'
 
+/** 侧边栏导航项；`key` 是 i18n 键，`icon` 是内联 SVG。 */
 const ITEMS: { page: Page; key: string; icon: ReactElement }[] = [
   {
     page: 'generate',
@@ -49,6 +62,7 @@ const ITEMS: { page: Page; key: string; icon: ReactElement }[] = [
   }
 ]
 
+/** 左侧导航栏：按 `navigation` store 的当前页高亮。 */
 export function Sidebar() {
   const page = useNavigationStore((s) => s.page)
   const go = useNavigationStore((s) => s.go)
@@ -74,7 +88,7 @@ export function Sidebar() {
   )
 }
 
-/** Brand mark: isometric blueprint cube with cyan ink gradient + dark edge lines. */
+/** 品牌标识：等轴测蓝图立方体，青色墨迹渐变 + 深色棱线。 */
 function BrandMark({ size = 17 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -90,66 +104,111 @@ function BrandMark({ size = 17 }: { size?: number }) {
   )
 }
 
-interface RamSample {
-  total: number
-  free: number
-  percent: number
+/** 标题栏用的资源快照（与 `api/system.ts` 的 `SystemStats` 同构）。 */
+interface SystemStats {
+  /** CPU 占用百分比；取不到为 `null`。 */
+  cpuPercent: number | null
+  /** 内存占用（字节）与百分比。 */
+  memory: { total: number | null; used: number | null; percent: number | null }
+  /** 显存与 GPU 利用率；无可用 GPU 时为 `null`。 */
+  gpu: { vramTotal: number | null; vramUsed: number | null; vramPercent: number | null; util: number | null } | null
 }
 
-function fmtGB(bytes: number): string {
-  return (bytes / 1024 ** 3).toFixed(1)
+/** 把字节数格式化为 GB 文本；取不到时显示破折号而不是 0。 */
+function fmtGB(bytes: number | null | undefined): string {
+  return bytes == null || Number.isNaN(bytes) ? '—' : (bytes / 1024 ** 3).toFixed(1)
 }
 
+/** 按占用率返回进度条/数值的配色类名：正常 → 警告 → 告急。 */
+function utilLevel(pct: number): { bar: string; text: string } {
+  if (pct >= 90) return { bar: 'titlebar__bar--high', text: 'titlebar__val--high' }
+  if (pct >= 75) return { bar: 'titlebar__bar--warn', text: 'titlebar__val--warn' }
+  return { bar: 'titlebar__bar--ok', text: '' }
+}
+
+/** 标题栏里的单个紧凑监控条（标签 + 进度条 + 数值 + 可选补充）。 */
+function Metric({
+  label,
+  value,
+  pct,
+  title,
+  extra
+}: {
+  label: string
+  value: string
+  pct: number | null
+  title: string
+  extra?: string
+}) {
+  const lvl = utilLevel(pct ?? 0)
+  return (
+    <div className="titlebar__metric" title={title}>
+      <span className="titlebar__mlabel">{label}</span>
+      <span className="titlebar__mbar">
+        <span
+          className={`titlebar__mfill ${lvl.bar}`}
+          // 夹到 0~100：偶发的采样抖动可能给出越界值，会让进度条溢出容器。
+          style={{ width: `${Math.min(100, Math.max(0, pct ?? 0))}%` }}
+        />
+      </span>
+      <span className={`titlebar__mvalue ${lvl.text}`}>{value}</span>
+      {extra ? <span className="titlebar__mextra">{extra}</span> : null}
+    </div>
+  )
+}
+
+/** 顶部标题栏：品牌 + 可选资源监控 + 窗口控制按钮。 */
 export function TitleBar() {
-  const showRamIndicator = useAppStore((s) => s.showRamIndicator)
-  const [mem, setMem] = useState<RamSample | null>(null)
+  const showCpu = useAppStore((s) => s.showCpu)
+  const showRam = useAppStore((s) => s.showRam)
+  const showVram = useAppStore((s) => s.showVram)
+  const showGpu = useAppStore((s) => s.showGpu)
+  const [stats, setStats] = useState<SystemStats | null>(null)
   const t = useT()
 
-  // Poll every 2s while the indicator is enabled. Guard with a no-op when the
-  // sample is unchanged so we never re-render the always-mounted title bar on
-  // a tick that changed nothing — that alone avoids a perpetual ~0.5Hz rerender.
+  // 只要任一监控项开启，就轮询后端资源指标。该读取在嵌入式浏览器与
+  // Electron 中通用（不依赖 preload）。
+  // 退避（优化文档 6.2）：连续失败（后端崩溃/重启中）时把轮询从 2s 逐步
+  // 降频到 10s，成功后复位——避免后端离线期间每 2s 白打一次 401/超时请求。
+  const anyMetric = showCpu || showRam || showVram || showGpu
   useEffect(() => {
-    if (!showRamIndicator) {
-      setMem(null)
+    if (!anyMetric) {
+      setStats(null)
       return
     }
     let active = true
-    const read = () =>
-      window.meshforge
-        ?.getRam()
+    let failures = 0
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const intervalMs = () => (failures === 0 ? 2000 : Math.min(2000 * failures, 10000))
+    const schedule = () => {
+      if (!active) return
+      timer = setTimeout(run, intervalMs())
+    }
+    const run = () => {
+      getSystemStats()
         .then((next) => {
-          if (!active || !next) return
-          setMem((prev) => {
-            if (
-              prev &&
-              prev.percent === next.percent &&
-              prev.total === next.total &&
-              prev.free === next.free
-            ) {
-              return prev
-            }
-            return next
-          })
+          if (!active) return
+          failures = 0
+          setStats(next)
         })
-        .catch(() => undefined)
-    read()
-    const timer = setInterval(read, 2000)
+        // 静默失败：后端短暂不可达时保留上一次的读数，比清空更不易误导；
+        // 失败计数递增触发退避。
+        .catch(() => {
+          if (active) failures += 1
+        })
+        .finally(schedule)
+    }
+    run()
     return () => {
       active = false
-      clearInterval(timer)
+      if (timer) clearTimeout(timer)
     }
-  }, [showRamIndicator])
+  }, [anyMetric])
 
-  const pct = mem ? Math.min(100, Math.round(mem.percent)) : 0
-  let barColor = 'titlebar__rambar--ok'
-  let textColor = 'titlebar__ramtext'
-  if (pct >= 90) {
-    barColor = 'titlebar__rambar--high'
-    textColor = 'titlebar__ramtext--high'
-  } else if (pct >= 75) {
-    barColor = 'titlebar__rambar--warn'
-    textColor = 'titlebar__ramtext--warn'
-  }
+  const mem = stats?.memory
+  const gpu = stats?.gpu
+  const memPct = mem?.percent ?? 0
+  const vramPct = gpu?.vramPercent ?? 0
 
   return (
     <div className="titlebar">
@@ -157,22 +216,46 @@ export function TitleBar() {
         <BrandMark />
         <span className="titlebar__app">{t('titlebar.app')}</span>
       </span>
-      {showRamIndicator && mem && (
-        <div
-          className="titlebar__ram"
-          title={t('titlebar.ramTitle', {
-            used: fmtGB(mem.total - mem.free),
-            available: fmtGB(mem.free),
-            total: fmtGB(mem.total)
-          })}
-        >
-          <span className="titlebar__ramlabel">{t('titlebar.ram')}</span>
-          <span className="titlebar__rambar">
-            <span className={`titlebar__ramfill ${barColor}`} style={{ width: `${pct}%` }} />
-          </span>
-          <span className={`titlebar__ramvalue ${textColor}`}>
-            {fmtGB(mem.total - mem.free)} / {fmtGB(mem.total)} GB
-          </span>
+      {anyMetric && stats && (
+        <div className="titlebar__metrics">
+          {showCpu && (
+            <Metric
+              label={t('titlebar.metrics.cpu')}
+              value={stats.cpuPercent == null ? '—' : `${Math.round(stats.cpuPercent)}%`}
+              pct={stats.cpuPercent}
+              title={t('titlebar.metrics.cpuTitle')}
+            />
+          )}
+          {showRam && (
+            <Metric
+              label={t('titlebar.metrics.ram')}
+              value={`${fmtGB(mem?.used)}/${fmtGB(mem?.total)}`}
+              pct={memPct}
+              title={t('titlebar.metrics.ramTitle', {
+                used: fmtGB(mem?.used),
+                total: fmtGB(mem?.total)
+              })}
+            />
+          )}
+          {showVram && gpu && (
+            <Metric
+              label={t('titlebar.metrics.vram')}
+              value={`${fmtGB(gpu.vramUsed)}/${fmtGB(gpu.vramTotal)}`}
+              pct={vramPct}
+              title={t('titlebar.metrics.vramTitle', {
+                used: fmtGB(gpu.vramUsed),
+                total: fmtGB(gpu.vramTotal)
+              })}
+            />
+          )}
+          {showGpu && gpu && (
+            <Metric
+              label={t('titlebar.metrics.gpu')}
+              value={gpu.util == null ? '—' : `${Math.round(gpu.util)}%`}
+              pct={gpu.util}
+              title={t('titlebar.metrics.gpuTitle')}
+            />
+          )}
         </div>
       )}
       <div className="titlebar__spacer" />

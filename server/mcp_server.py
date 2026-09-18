@@ -1,21 +1,21 @@
-"""Meshforge MCP Server
-Exposes Meshforge's image-to-3D pipeline as MCP tools for external agents
-(Claude Desktop, Codex CLI, Cursor, etc.). Built on the FastMCP SDK.
+"""Meshforge 的 MCP Server。
 
-Requires the Meshforge FastAPI backend to already be running on :8766 —
-start the Meshforge desktop app, or run it manually:
+把 Meshforge 的图片转 3D 流水线作为 MCP 工具暴露给外部智能体
+（Claude Desktop、Codex CLI、Cursor 等），基于 FastMCP SDK 实现。
+
+需要 Meshforge 的 FastAPI 后端已在 :8766 上运行——可启动 Meshforge 桌面应用，
+或手动运行：
 
     cd server && .venv\\Scripts\\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8766
 
-Real (GPU) generation additionally needs the Hunyuan3D-2-mini inference
-service on :8767 (see scripts/start-hunyuan-server.bat). Without it, use
-generator_id="mock-relief" for a CPU-only preview mesh.
+真正的（GPU）生成走 :8767 上的 Hunyuan3D-2-mini 推理服务
+（见 scripts/start-hunyuan-server.bat）。
 
-Install the optional MCP dependencies into the backend venv first:
+先在后端 venv 里安装可选的 MCP 依赖：
 
     server/.venv/Scripts/python.exe -m pip install -r server/requirements-mcp.txt
 
-Claude Desktop configuration (~/.config/claude/claude_desktop_config.json):
+Claude Desktop 配置（~/.config/claude/claude_desktop_config.json）：
 
     {
       "mcpServers": {
@@ -26,7 +26,7 @@ Claude Desktop configuration (~/.config/claude/claude_desktop_config.json):
       }
     }
 
-Codex CLI (config.toml):
+Codex CLI（config.toml）：
 
     [mcp_servers.meshforge]
     command = "C:/Users/HELLOWORLD/Desktop/oss/meshforge/server/.venv/Scripts/python.exe"
@@ -35,24 +35,42 @@ Codex CLI (config.toml):
 
 import json
 import mimetypes
+import os
 from pathlib import Path
 from typing import Annotated, Literal
 
 import httpx
 from pydantic import Field
 
-# mcp 2.x renamed FastMCP -> MCPServer; keep a fallback so both 1.x and 2.x work.
+# mcp 2.x 把 FastMCP 改名为 MCPServer；保留回退分支，使 1.x 与 2.x 都能跑。
 try:
     from mcp.server.mcpserver import MCPServer as _MCP  # type: ignore[attr-defined]
 except ImportError:  # pragma: no cover - mcp 1.x
     from mcp.server.fastmcp import FastMCP as _MCP  # type: ignore[no-redef]
 
-API_BASE = "http://127.0.0.1:8766"
+# 端口跟随桌面应用实际使用的端口（MESHFORGE_API_PORT）；独立运行时默认 8766。
+API_BASE = f"http://127.0.0.1:{os.environ.get('MESHFORGE_API_PORT') or 8766}"
 
-# /files/<job_id>/model.glb is served from server/workspace/<job_id>/model.glb.
-WORKSPACE_DIR = Path(__file__).resolve().parent / "workspace"
+# 与 server/config.py 同一规则：MESHFORGE_DATA_DIR 指向数据目录时，
+# workspace（及其模型产物）也搬了过去。
+_DATA_ROOT = Path(os.environ.get("MESHFORGE_DATA_DIR") or Path(__file__).resolve().parent)
 
-# Same allow-list as server/routers/generate.py (ALLOWED_IMAGE_EXTS).
+# /files/<job_id>/model.glb 实际落在 <数据目录>/workspace/<job_id>/model.glb。
+WORKSPACE_DIR = _DATA_ROOT / "workspace"
+
+# 与 server/main.py 同一规则：后端把生效的 API token 持久化在数据目录的
+# .api-token（workspace 之外，不会被 /files 静态挂载公开）。本机同用户进程
+# 读取它即可通过认证。
+def _load_api_token() -> str:
+    try:
+        return (_DATA_ROOT / ".api-token").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+_API_TOKEN = _load_api_token()
+
+# 与 server/routers/generate.py 里的 ALLOWED_IMAGE_EXTS 保持同一份白名单。
 ALLOWED_IMAGE_EXTS = {"png", "jpg", "jpeg", "webp", "gif", "bmp", "avif"}
 
 mcp = _MCP("meshforge")
@@ -66,7 +84,12 @@ async def _request(
     url: str,
     **kwargs,
 ) -> httpx.Response:
-    """One request helper: converts connection/HTTP errors into readable messages."""
+    """统一的请求辅助函数：把连接/HTTP 错误转换为可读的报错信息。"""
+    # 后端启用了本地 API token 认证；自动附上 Authorization 头。
+    headers = dict(kwargs.pop("headers", None) or {})
+    if _API_TOKEN:
+        headers.setdefault("Authorization", f"Bearer {_API_TOKEN}")
+    kwargs["headers"] = headers
     try:
         r = await client.request(method, url, **kwargs)
         r.raise_for_status()
@@ -101,7 +124,7 @@ async def meshforge_health() -> str:
 
 @mcp.tool()
 async def meshforge_list_generators() -> str:
-    """List the 3D generators registered in Meshforge (hunyuan3d-2-mini for real GPU generation, mock-relief for CPU previews), their load state and accepted parameters."""
+    """List the 3D generators registered in Meshforge (hunyuan3d-2-mini for GPU generation), their load state and accepted parameters."""
     async with httpx.AsyncClient(timeout=10.0) as client:
         r = await _request(client, "GET", f"{API_BASE}/generators")
         generators = r.json()
@@ -126,8 +149,8 @@ async def meshforge_generate_from_image(
         str,
         Field(
             description=(
-                "Generator to use. Built-ins: hunyuan3d-2-mini (real GPU generation, "
-                "needs the :8767 inference service), mock-relief (CPU preview)."
+                "Generator to use. Built-in: hunyuan3d-2-mini (real GPU generation, "
+                "needs the :8767 inference service)."
             )
         ),
     ] = "hunyuan3d-2-mini",
@@ -139,8 +162,6 @@ async def meshforge_generate_from_image(
     ] = None,
     seed: Annotated[int, Field(description="Random seed; -1 for random, fixed seed reproduces a result.", ge=-1)] | None = None,
     remove_base: Annotated[bool, Field(description="Remove the support disc hallucinated under the object.")] | None = None,
-    grid: Annotated[int, Field(description="mock-relief only: heightmap grid resolution.", ge=32, le=256)] | None = None,
-    depth: Annotated[float, Field(description="mock-relief only: relief depth.", ge=0.05, le=2.0)] | None = None,
 ) -> str:
     """Generate a 3D mesh from a 2D image file. Submits a background job and returns a job_id — poll meshforge_get_job_status until it succeeds or fails."""
     path = Path(image_path)
@@ -151,7 +172,7 @@ async def meshforge_generate_from_image(
         return f"Unsupported image format '.{ext}'. Allowed: {', '.join(sorted(ALLOWED_IMAGE_EXTS))}"
 
     params: dict[str, object] = {}
-    for key in ("steps", "guidance", "octree", "seed", "grid", "depth"):
+    for key in ("steps", "guidance", "octree", "seed"):
         value = locals().get(key)
         if value is not None:
             params[key] = value
@@ -195,7 +216,7 @@ async def meshforge_get_job_status(job_id: Annotated[str, Field(description="Job
 
 @mcp.tool()
 async def meshforge_cancel_job(job_id: Annotated[str, Field(description="Job ID to cancel.")]) -> str:
-    """Request cooperative cancellation of a running generation job."""
+    """请求协作式取消一个正在运行的生成任务。"""
     async with httpx.AsyncClient(timeout=10.0) as client:
         await _request(client, "POST", f"{API_BASE}/generate/jobs/{job_id}/cancel")
     return f"Cancellation requested for job {job_id}."

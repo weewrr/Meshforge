@@ -1,6 +1,14 @@
+/**
+ * three.js 3D 查看器（基于 @react-three/fiber）。
+ *
+ * 职责：场景 / 相机 / 灯光 / 网格地面的搭建，模型落地对齐（包围盒底面贴到
+ * y=0）、材质模式切换、选中高亮、截图导出，以及加载新模型时对旧几何体与
+ * 材质的显式释放（three.js 不自动 GC，漏释放会持续吃显存）。
+ */
+
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ElementRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls, TransformControls, useGLTF } from '@react-three/drei'
+import { OrbitControls, Html, TransformControls, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Group, Mesh } from 'three'
 import { useAppStore } from '../stores/app'
@@ -68,63 +76,143 @@ function getUvChecker(): THREE.Texture {
 
 // ─── View-mode material swapping ────────────────────────────────────────────
 
+/**
+ * 每个网格的"视图模式材质"缓存（优化文档 12.7 资源治理）。
+ *
+ * wireframe 的克隆材质与 normals/matcap/uv 的新建材质都存进 `_modeMats`：
+ * 反复切换模式时**复用**同一份材质，而不是每次新建——旧实现每切一次就泄漏
+ * 一份 GPU 材质（three.js 不自动 GC）。材质本体在模型卸载时统一 dispose；
+ * matcap/uv 材质引用的纹理是模块级单例，dispose 材质不会动它们。
+ */
+type ModeMats = Partial<Record<ViewMode, THREE.Material | THREE.Material[]>>
+
 function applyViewMode(root: THREE.Object3D, mode: ViewMode): void {
   root.traverse((obj) => {
     const mesh = obj as Mesh
     if (!mesh.isMesh) return
     const data = mesh.userData as {
       _origMat?: THREE.Material | THREE.Material[]
-      _modeMat?: ViewMode
+      _modeMats?: ModeMats
     }
     if (!data._origMat) data._origMat = mesh.material as THREE.Material | THREE.Material[]
+    data._modeMats ??= {}
 
     if (mode === 'solid') {
       mesh.material = data._origMat
       return
     }
-    if (mode === 'wireframe') {
+
+    let m = data._modeMats[mode]
+    if (!m) {
       const orig = data._origMat
-      const toWire = (m: THREE.Material): THREE.Material => {
-        const c = m.clone() as THREE.MeshStandardMaterial
-        c.wireframe = true
-        return c
+      if (mode === 'wireframe') {
+        const toWire = (mat: THREE.Material): THREE.Material => {
+          const c = mat.clone() as THREE.MeshStandardMaterial
+          c.wireframe = true
+          return c
+        }
+        m = Array.isArray(orig) ? orig.map(toWire) : toWire(orig)
+      } else if (mode === 'normals') {
+        m = new THREE.MeshNormalMaterial()
+      } else if (mode === 'matcap') {
+        m = new THREE.MeshMatcapMaterial({ matcap: getMatcap() })
+      } else {
+        m = new THREE.MeshStandardMaterial({ map: getUvChecker(), roughness: 0.8, metalness: 0 })
       }
-      mesh.material = Array.isArray(orig)
-        ? orig.map(toWire)
-        : toWire(orig)
-      return
+      data._modeMats[mode] = m
     }
-    // Shared single-material modes replace materials wholesale.
-    if (data._modeMat !== mode) {
-      if (mode === 'normals') mesh.material = new THREE.MeshNormalMaterial()
-      else if (mode === 'matcap') mesh.material = new THREE.MeshMatcapMaterial({ matcap: getMatcap() })
-      else if (mode === 'uv') mesh.material = new THREE.MeshStandardMaterial({ map: getUvChecker(), roughness: 0.8, metalness: 0 })
-      data._modeMat = mode
-    }
+    mesh.material = m
   })
 }
 
-// ─── Model ─────────────────────────────────────────────────────────────────
+/**
+ * 释放一个模型子树占用的全部 GPU 资源（优化文档 12.7）。
+ *
+ * 只应在"该子树的几何/材质/纹理不再被任何查看器使用"时调用（配合
+ * `useGLTF.clear(url)`）。处理分两类：
+ * - 原 GLTF 材质（`_origMat`）：dispose 材质本体 + 其独享纹理槽；
+ * - 模式材质（`_modeMats`）：只 dispose 材质本体——matcap/uv 引用的
+ *   模块级单例纹理必须常驻，wireframe 克隆与原材质共享纹理实例。
+ */
+function disposeModelResources(root: THREE.Object3D): void {
+  root.traverse((obj) => {
+    const mesh = obj as Mesh
+    if (!mesh.isMesh) return
+    mesh.geometry?.dispose()
+    const data = mesh.userData as {
+      _origMat?: THREE.Material | THREE.Material[]
+      _modeMats?: ModeMats
+    }
+    // 模式材质：仅释放材质本体，绝不碰纹理（单例 matcap/uv 还在被复用）。
+    for (const m of Object.values(data._modeMats ?? {})) {
+      if (Array.isArray(m)) m.forEach((x) => x?.dispose())
+      else m?.dispose()
+    }
+    // 原 GLTF 材质：材质本体 + 独享纹理一起释放。
+    const orig = data._origMat
+    const origs = Array.isArray(orig) ? orig : orig ? [orig] : []
+    origs.forEach((m) => {
+      if (!m) return
+      Object.values(m).forEach((v) => {
+        const t = v as THREE.Texture | null
+        if (t && (t as THREE.Texture).isTexture) t.dispose()
+      })
+      m.dispose()
+    })
+  })
+}
 
+// ─── 模型 ──────────────────────────────────────────────────────────────────
+
+/** 内部模型组件的属性：模型地址、视图模式、选中与手柄状态，以及若干回调。 */
 interface ModelProps {
+  /** 模型文件地址（由 `useGLTF` 加载）。 */
   url: string
+  /** 当前视图模式（solid / wireframe / normals / matcap / uv）。 */
   viewMode: ViewMode
+  /** 是否被选中（选中后显示交互手柄并高亮）。 */
   selected: boolean
+  /** 手柄模式；为 `null` 时不显示 `TransformControls`。 */
   gizmoMode: 'translate' | 'rotate' | 'scale' | null
+  /** 选中状态变更回调。 */
   onSelect: (selected: boolean) => void
+  /** 面数 / 顶点数统计回调；卸载时回传 `null` 表示清空。 */
   onStats: (stats: { triangles: number; vertices: number } | null) => void
-  /** Reports the vertical centre of the model (half its height after grounding). */
+  /** 回传模型贴地后的垂直中心高度（即半高），供相机重新对准。 */
   onFoot: (centreY: number) => void
+}
+
+/** 模型加载中的 DOM 浮层（Suspense fallback 用 Html 挂到画布之上）。 */
+function LoadingOverlay() {
+  return (
+    <Html center zIndexRange={[20, 0]}>
+      <div className="gp-viewer__loading" role="status" aria-live="polite">
+        <span className="gp-viewer__loadingspin" aria-hidden="true" />
+        <span className="gp-viewer__loadinglabel">Loading mesh…</span>
+      </div>
+    </Html>
+  )
 }
 
 function Model({ url, viewMode, selected, gizmoMode, onSelect, onStats, onFoot }: ModelProps) {
   const { scene } = useGLTF(url)
   const cloned = useMemo<Group>(() => scene.clone(true), [scene])
 
-  // Ground the model on the grid plane like a CAD/DCC viewport: centre it on
-  // X/Z and drop its bounding-box floor onto y = 0 (modly parity — its viewer
-  // keeps a persistent <gridHelper> and sits meshes on it). Runs before first
-  // paint so the model never flashes un-grounded.
+  // 卸载 / 换模型时显式释放 GPU 资源（优化文档 12.7）：three.js 不自动 GC。
+  // cloned 与 useGLTF 缓存共享几何/材质实例，因此必须连同缓存一起清理——
+  // 否则缓存里的引用会让已 dispose 的资源看起来"还有人用"。
+  // 同一 url 之后重新挂载时会重新加载（多一次网络请求，换取显存确定性释放）。
+  useEffect(() => {
+    return () => {
+      disposeModelResources(cloned)
+      useGLTF.clear(url)
+    }
+  }, [cloned, url])
+
+  // 像 CAD/DCC 视口那样把模型落到网格平面上：在 X/Z 上居中，
+  // 并让包围盒底面贴到 y = 0（与 modly 对齐——它的查看器保留常驻
+  // <gridHelper> 并把网格放在其上）。在首次绘制前执行，
+  // 避免模型闪现"悬空"状态。
   useLayoutEffect(() => {
     const box = new THREE.Box3().setFromObject(cloned)
     const size = box.getSize(new THREE.Vector3())
@@ -154,7 +242,7 @@ function Model({ url, viewMode, selected, gizmoMode, onSelect, onStats, onFoot }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stats computed once per loaded model
   }, [cloned])
 
-  // Emissive highlight while selected.
+  // 选中时用自发光高亮。
   useEffect(() => {
     cloned.traverse((obj) => {
       const mesh = obj as Mesh
@@ -188,6 +276,7 @@ function Model({ url, viewMode, selected, gizmoMode, onSelect, onStats, onFoot }
 
 // ─── Screenshot bridge ──────────────────────────────────────────────────────
 
+/** 截图桥：把"渲染当前帧并导出为 PNG dataURL"的函数挂到外部 ref，供工具栏调用。 */
 function ScreenshotBridge({ captureRef }: {
   captureRef: React.MutableRefObject<(() => string) | null>
 }) {
@@ -206,18 +295,25 @@ function ScreenshotBridge({ captureRef }: {
 
 // ─── Main viewer ───────────────────────────────────────────────────────────
 
+/**
+ * 主 3D 查看器组件。
+ *
+ * 维护场景背景、网格地平面、灯光与轨道控制器，并按 `useSceneStore` 的视图模式 /
+ * 自动旋转 / 选中状态渲染模型。即使 `url` 为 `null` 也保持挂载在网格地面上
+ *（与 modly 一致），仅显示提示层而不卸载，避免反复创建 / 销毁 WebGL 上下文。
+ */
 export default function Viewer3D({
   url,
   light
 }: {
-  /** null = no model loaded yet — the viewer stays mounted on the ground grid
-      (modly parity) and shows a hint overlay instead of unmounting. */
+  /** 模型地址；`null` 表示尚未加载模型——查看器仍挂载在地面网格上
+   *（与 modly 一致）并显示提示层，而非卸载。 */
   url: string | null
   light?: LightSettings
 }) {
   const l = light ?? { ambient: 0.7, main: 1.4, fill: 0.4 }
   const theme = useAppStore((s) => s.theme)
-  // Drafting-table scene colours — match the Workflows canvas paper per theme.
+  // 制图台式场景配色——随主题与工作流画布的纸面色保持一致。
   const sceneBg = theme === 'light' ? '#e9eef5' : '#0a0e18'
   const gridMajor = theme === 'light' ? '#8ba7c9' : '#3d6289'
   const gridMinor = theme === 'light' ? '#c5d3e6' : '#1c2e4a'
@@ -228,15 +324,15 @@ export default function Viewer3D({
   const setMeshSelected = useSceneStore((s) => s.setMeshSelected)
   const setMeshStats = useSceneStore((s) => s.setMeshStats)
   const captureRef = useRef<(() => string) | null>(null)
-  // Orbit target's Y follows the grounded model's vertical centre so the camera
-  // keeps framing the mesh (and the empty grid centre when nothing is loaded).
+  // 轨道目标点的 Y 跟随落地模型的竖直中心，让相机始终
+  // 取景到网格本身（未加载时则取景到空网格中心）。
   const [groundTargetY, setGroundTargetY] = useState(0)
   const orbitRef = useRef<ElementRef<typeof OrbitControls>>(null)
   useEffect(() => {
     if (!url) setGroundTargetY(0)
   }, [url])
-  // Retarget only when a model's grounded height actually changes — never on
-  // plain re-renders, so a pan/rotate the user already made is preserved.
+  // 仅在模型的落地高度真正变化时才重设目标点——绝不因普通
+  // 重渲染触发，从而保留用户已做好的平移 / 旋转。
   useEffect(() => {
     const c = orbitRef.current
     if (c) {
@@ -245,10 +341,10 @@ export default function Viewer3D({
     }
   }, [groundTargetY])
 
-  // Trace: crash triage markers. Each log line pinpoints how far the Import →
-  // Mesh flow got before the renderer died (terminal shows these via the main
-  // process console forwarding). Child effects (R3F Canvas / WebGL init) run
-  // before this one, so seeing this line means the WebGL context came up.
+  // 追踪：崩溃排查标记。每行日志都定位"导入 → 网格"流程
+  // 在渲染进程死掉前走到了哪一步（终端经主进程的控制台转发可见）。
+  // 子 effect（R3F Canvas / WebGL 初始化）先于本 effect 执行，
+  // 因此能看到这行就意味着 WebGL 上下文已建立。
   useEffect(() => {
     useLogsStore.getState().info('viewer: mounted (WebGL canvas up)')
     return () => {
@@ -259,17 +355,19 @@ export default function Viewer3D({
     if (url) useLogsStore.getState().info(`viewer: loading mesh from ${url}`)
   }, [url])
 
-  // Re-render before capturing so the buffer holds a fresh frame.
+  // 截图前先重渲染一帧，保证缓冲区里是新画面。
   function screenshot(): string | null {
     return captureRef.current?.() ?? null
   }
 
   return (
     <div className="gp-viewer__canvas">
+      {/* preserveDrawingBuffer 已移除（优化文档 13.8）：它会让整帧常驻显存。
+          截图桥在 toDataURL 前同步重渲染一帧（ScreenshotBridge），同一 JS
+          任务内读取像素无需保留缓冲区——这是 three.js 官方推荐做法。 */}
       <Canvas
         camera={{ position: [2.2, 1.6, 2.2], fov: 45 }}
         dpr={[1, 1.5]}
-        gl={{ preserveDrawingBuffer: true }}
         onPointerMissed={() => setMeshSelected(false)}
       >
         <color attach="background" args={[sceneBg]} />
@@ -279,7 +377,7 @@ export default function Viewer3D({
         {/* Persistent ground grid — blueprint drafting floor, always visible. */}
         <gridHelper args={[10, 20, gridMajor, gridMinor]} />
         {url ? (
-          <Suspense fallback={null}>
+          <Suspense fallback={<LoadingOverlay />}>
             <Model
               url={url}
               viewMode={viewMode}
@@ -362,6 +460,7 @@ const VIEW_MODES: { mode: ViewMode; label: string; icon: React.ReactNode }[] = [
   }
 ]
 
+/** 浮动工具栏：切换视图模式、开关自动旋转、触发截图下载。 */
 function ViewerToolbar({ onScreenshot }: { onScreenshot: () => string | null }) {
   const viewMode = useSceneStore((s) => s.viewMode)
   const setViewMode = useSceneStore((s) => s.setViewMode)

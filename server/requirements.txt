@@ -6,4 +6,4 @@ numpy>=1.26
 trimesh>=4.0
 # 网格工具（processor 节点）QEM 减面 / 孔洞闭合 / 非流形清理
 pymeshlab>=2023.12
-psutil>=5.9
+psutil>=7.2.2

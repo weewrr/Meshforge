@@ -2,7 +2,7 @@ fastapi>=0.115
 uvicorn>=0.30
 python-multipart>=0.0.9
 pillow>=10.0
-numpy>=1.26
+numpy>=2.5.3
 trimesh>=4.0
 # 网格工具（processor 节点）QEM 减面 / 孔洞闭合 / 非流形清理
 pymeshlab>=2023.12

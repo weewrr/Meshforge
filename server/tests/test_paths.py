@@ -52,6 +52,9 @@ def check(name: str, fn) -> None:
     except Exception as exc:  # noqa: BLE001
         RESULTS.append((name, False, f'{type(exc).__name__}: {exc}'))
         print(f'FAIL {name}: {type(exc).__name__}: {exc}')
+        # CI：日志正文匿名不可读，输出 ::error:: 让失败明细成为可匿名
+        # 读取的 GitHub 注解（优化文档 5.1）。
+        print(f'::error::{name}: {type(exc).__name__}: {exc}')
 
 
 # ─── 测试环境搭建 ─────────────────────────────────────────────────────────────

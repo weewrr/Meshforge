@@ -91,12 +91,19 @@ def list_workflows() -> list[dict]:
                     'updatedAt': data.get('updatedAt') or _mtime(path),
                     'folder': data.get('folder'),
                     'bookmarked': bool(data.get('bookmarked', False)),
+                    # 排序专用：浮点 mtime 精度高于 updatedAt 的秒级字符串，
+                    # CI（Linux，ext4 纳秒粒度）上两次快速保存不会并列。
+                    '_ts': path.stat().st_mtime,
                 }
             )
         except (json.JSONDecodeError, KeyError):
             # 单个文件坏掉不应拖垮整个列表：跳过它，继续返回其余工作流。
             continue
-    items.sort(key=lambda item: item['updatedAt'], reverse=True)
+    # 主键浮点 mtime，次键 id——updatedAt 同秒内并列时仍有确定性顺序，
+    # 不依赖 glob 的文件系统遍历序（Linux 上是 hash 序，非字母序）。
+    items.sort(key=lambda item: (item['_ts'], item['id']), reverse=True)
+    for item in items:
+        del item['_ts']
     return items
 
 

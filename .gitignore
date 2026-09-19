@@ -54,3 +54,6 @@ scripts/start-*-server.bat
 __pycache__/
 .pytest_cache/
 
+# 人工冒烟脚本：需 hy3dgen 专用 venv + 本地权重，无自动化依赖。
+scripts/test_hunyuan_infer.py
+

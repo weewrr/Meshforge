@@ -111,7 +111,7 @@ def _load_model() -> tuple:
             # 失败信息里带上修复路径，用户可直接照做。
             _model_error = (
                 f'mvdream package import failed ({exc}). Clone ByteDance/MVDream '
-                f'to D:/github/MVDream and run scripts/setup-mvdream-server.bat.')
+                f'to D:/github/MVDream and set up the environment (see README deployment section).')
             raise RuntimeError(_model_error)
 
         try:

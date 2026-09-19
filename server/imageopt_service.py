@@ -24,9 +24,9 @@ depth-anything-v2 官方包）无法在 setup 里保证一次装全，因此**�
 直接实现推理。所有模型按 tool 惰性加载，仅当真正被调用时才占用显存。
 
 6GB 显存提示：本服务默认 fp32；6GB 卡建议在调用时给深度/超分类模型传 low_vram=1，
-用半精度/更低分辨率（setup 脚本已写清）。
+用半精度/更低分辨率（见 README 部署章节的显存说明）。
 
-用法：scripts\\start-imageopt-server.bat（内部调用本文件）
+用法：由后端按需拉起（本文件是 HTTP 服务，不是命令行入口）
 CLI：python imageopt_service.py --model-root D:\\github\\models --model ImageOptimization --port 8783
 """
 
@@ -82,8 +82,8 @@ def _torch():
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status_code=500,
-            detail=f'PyTorch 未就绪（{type(exc).__name__}: {exc}）。请先运行 '
-                   'scripts\\setup-imageopt-server.bat 安装 CUDA torch。',
+            detail=f'PyTorch 未就绪（{type(exc).__name__}: {exc}）。请先按 README 部署章节'
+                   '安装 CUDA 版 torch。',
         )
 
 def _pil2rgb(img: PIL.Image.Image) -> np.ndarray:
@@ -199,7 +199,7 @@ def _build_esrgan(weight_dir: Path):
             model.load_state_dict(sd, strict=False)
         except Exception as exc:
             raise _missing(f'Real-ESRGAN 权重无法加载（state dict 与 RRDBNet x2 架构不匹配: {exc}）。'
-                           '如权重键名特殊可在 scripts/setup-imageopt-server.bat 中说明。')
+                           '如权重键名特殊，请参考 README 部署章节调整加载逻辑。')
     model.eval()
 
     dev = 'cuda' if torch.cuda.is_available() else 'cpu'

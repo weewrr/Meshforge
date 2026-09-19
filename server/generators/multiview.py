@@ -171,7 +171,7 @@ class MultiviewGenerator(BaseGenerator):
         if not ok:
             raise RuntimeError(
                 f'{self.display_name}（{self._url}）服务不可达且自动启动失败 — '
-                f'请先完成环境搭建与权重落盘（见 scripts/setup-{self.id}-server.bat），'
+                f'请先完成环境搭建与权重落盘（见 README 部署章节），'
                 f'查看 workspace/logs/{self._autostart["name"].lower()}-{self.port}.log'
             )
 

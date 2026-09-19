@@ -9,7 +9,7 @@
     cd server && .venv\\Scripts\\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8766
 
 真正的（GPU）生成走 :8767 上的 Hunyuan3D-2-mini 推理服务
-（见 scripts/start-hunyuan-server.bat）。
+（搭建方式见 README 部署章节）。
 
 先在后端 venv 里安装可选的 MCP 依赖：
 

@@ -46,7 +46,7 @@ jobs:
           pip install -r server/requirements-mcp.txt
           # 与 server/requirements.txt 保持同步：system_stats 用 psutil，
           # 图像路由用 pillow。pymeshlab 等重依赖仅推理服务需要，CI 不装。
-          pip install fastapi "uvicorn[standard]" pydantic numpy trimesh httpx psutil pillow
+          pip install fastapi uvicorn pydantic numpy trimesh httpx psutil pillow
 
       - name: Syntax check (py_compile)
         run: python -m compileall server -q
@@ -83,40 +83,109 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r server/requirements-mcp.txt
-          pip install fastapi "uvicorn[standard]" pydantic numpy trimesh httpx psutil pillow
+          pip install fastapi uvicorn pydantic numpy trimesh httpx psutil pillow
 
       - name: Start backend and smoke test
         env:
           MESHFORGE_API_PORT: '8971'
         run: |
-          export MESHFORGE_DATA_DIR="$(mktemp -d)"
-          cd server
-          nohup python -m uvicorn main:app --host 127.0.0.1 --port 8971 > "$MESHFORGE_DATA_DIR/uvicorn.log" 2>&1 &
-          echo "$!" > /tmp/meshforge.pid
+          set -euo pipefail
+          port="$MESHFORGE_API_PORT"
+          base="http://127.0.0.1:${port}"
 
-          # 等健康探针就绪（最多 30s）。
+          # 数据目录隔离：workspace / models / extensions / .api-token 全部落这里。
+          #
+          # 关键坑（这正是此前 curl: (7) + 健康检查永远不就绪的根因）：
+          # `mktemp -d` 在 Git Bash 下产出 `/tmp/xxx` 这类 POSIX 路径，
+          # 但 Windows 版 python 会把 `/tmp/xxx` 解析成 **当前盘符根** 的
+          # `D:\tmp\xxx`，与 bash 眼中的 `%TEMP%\xxx` 完全不是同一个目录。
+          # 于是后端把 .api-token / workspace 写到一处，shell 去另一处读，
+          # 无论等多久都拿不到 token。
+          # 解法：让目标平台上的 python 自己解析出真实绝对路径，
+          # 再回填给 shell——两个平台语义都正确。
+          if [ -n "${RUNNER_TEMP:-}" ]; then
+            data_dir="$RUNNER_TEMP/meshforge-smoke"
+            rm -rf "$data_dir" && mkdir -p "$data_dir"
+          else
+            # 本地为 Git Bash：先让 python 把 tempfile 目录解析成绝对路径。
+            data_dir="$(python -c 'import tempfile; print(tempfile.mkdtemp(prefix="meshforge-smoke-"))')"
+          fi
+          export MESHFORGE_DATA_DIR="$data_dir"
+          log="$MESHFORGE_DATA_DIR/uvicorn.log"
+          probe_json="$MESHFORGE_DATA_DIR/probe.json"
+
+          # 导入门禁：main.py 用顶层绝对导入（from config import ...），
+          # server/ 下没有 __init__.py，因此**只能**在 server/ 目录内以
+          # `main` 为顶层模块导入。这里先单独 import 一次，让依赖缺失或
+          # 导入错误立刻在工作流日志里带 traceback 暴露，而不是干等健康探针超时。
+          (
+            cd server
+            python -c "import main; print('import ok:', main.app)"
+          )
+
+          # uvicorn 用 `python -m uvicorn` 而非裸 `uvicorn`：前者只依赖
+          # 解释器自身的 sys.path，不要求 PATH 里有 entry-point 脚本，
+          # 在各种 runner 镜像上都稳定。
+          (
+            cd server
+            python -m uvicorn main:app --host 127.0.0.1 --port "$port" >"$log" 2>&1
+          ) &
+          pid=$!
+          echo "$pid" > /tmp/meshforge.pid
+
+          # 无论成败都回收子进程，并在失败时强制打印后端日志。
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "::group::Uvicorn log"
+              cat "$log" || true
+              echo "::endgroup::"
+            fi
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            exit "$status"
+          }
+          trap cleanup EXIT
+
+          # 等健康探针就绪（最多 30s）。进程中途死掉立即失败。
           for i in $(seq 1 30); do
-            if curl -fsS "http://127.0.0.1:8971/health" | grep -q '"ok"'; then break; fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "backend exited before becoming ready"
+              exit 1
+            fi
+            if curl -s -f -o "$probe_json" "$base/health" 2>/dev/null &&
+               grep -q '"ok"' "$probe_json"; then break; fi
             sleep 1
           done
-          curl -fsS "http://127.0.0.1:8971/health" | grep -q '"ok"' || { cat "$MESHFORGE_DATA_DIR/uvicorn.log"; exit 1; }
+          curl -fsS "$base/health" | grep -q '"ok"'
+          echo "health: ok"
+
+          # 取 HTTP 状态码：显式 --output 到真实文件，不用 -o /dev/null。
+          # Git for Windows 自带的 curl 对 /dev/null 会写失败并返回 23，
+          # 此时 -w 仍打印出正确状态码，退出码却污染了严格模式。
+          probe_status() {
+            curl -sS --output "$probe_json" --write-out '%{http_code}' "$@" || true
+          }
 
           # 认证：无 token 401，带 token 200（token 由后端写入数据目录）。
-          code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8971/workflows")
+          code=$(probe_status "$base/workflows")
           [ "$code" = "401" ] || { echo "expected 401 without token, got $code"; exit 1; }
           TOKEN=$(cat "$MESHFORGE_DATA_DIR/.api-token")
-          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8971/workflows")
+          code=$(probe_status -H "Authorization: Bearer $TOKEN" "$base/workflows")
           [ "$code" = "200" ] || { echo "expected 200 with token, got $code"; exit 1; }
+          echo "auth: 401 without token / 200 with token"
 
           # workflows CRUD 往返。
           curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
             -d '{"id":"smoke","name":"Smoke","nodes":[],"edges":[]}' \
-            "http://127.0.0.1:8971/workflows" | grep -q '"ok"'
-          curl -fsS -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8971/workflows/smoke" | grep -q '"Smoke"'
-          curl -fsS -X DELETE -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8971/workflows/smoke" | grep -q '"ok"'
+            "$base/workflows" | grep -q '"ok"'
+          curl -fsS -H "Authorization: Bearer $TOKEN" "$base/workflows/smoke" | grep -q '"Smoke"'
+          curl -fsS -X DELETE -H "Authorization: Bearer $TOKEN" "$base/workflows/smoke" | grep -q '"ok"'
+          echo "workflows CRUD: ok"
 
           # 就绪探针。
-          curl -fsS "http://127.0.0.1:8971/health/ready" | grep -q '"ready"'
+          curl -fsS "$base/health/ready" | grep -q '"ready"'
+          echo "readiness probe: ok"
 
       - name: Stop backend
         if: always()
@@ -152,7 +221,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r server/requirements-mcp.txt
-          pip install fastapi "uvicorn[standard]" pydantic numpy trimesh httpx psutil pillow
+          pip install fastapi uvicorn pydantic numpy trimesh httpx psutil pillow
 
       - name: pip check
         run: python -m pip check

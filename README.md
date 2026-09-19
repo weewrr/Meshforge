@@ -214,16 +214,10 @@ npm run build      # production bundle
 
 MeshForge ships with a CPU *mock relief* generator so the whole UI works out of the box. To generate true **image → 3D mesh** results with Hunyuan3D-2-mini on a local GPU (**≥ 6 GB VRAM**):
 
-1. One-click setup (requires [uv](https://docs.astral.sh/uv/)) — creates a Python 3.11 + CUDA venv, installs `hy3dgen==2.0.2` and its runtime deps from a CN mirror, and downloads the weights (repo `tencent/Hunyuan3D-2mini`, subfolders `hunyuan3d-dit-v2-mini` / `hunyuan3d-vae-v2-mini` / `hunyuan3d-vae-v2-mini-withencoder`) into `server\models\`:
-   ```
-   scripts\setup-hunyuan-server.bat
-   ```
-2. Start the inference service:
-   ```
-   scripts\start-hunyuan-server.bat        # listens on http://127.0.0.1:8767
-   ```
+1. Set up the environment (requires [uv](https://docs.astral.sh/uv/)) — create a Python 3.11 + CUDA venv, install `hy3dgen==2.0.2` and its runtime deps from a CN mirror, and download the weights (repo `tencent/Hunyuan3D-2mini`, subfolders `hunyuan3d-dit-v2-mini` / `hunyuan3d-vae-v2-mini` / `hunyuan3d-vae-v2-mini-withencoder`) into `server\models\`. The exact commands live in `server/requirements-hunyuan.txt`.
+2. Start the inference service on http://127.0.0.1:8767:
 
-   The launcher auto-detects the weights in this order: `HY3DGEN_MODELS` env → legacy `D:\github\models` → `server\models`. Prefer manual setup? The exact commands live in `server/requirements-hunyuan.txt`.
+   The launcher auto-detects the weights in this order: `HY3DGEN_MODELS` env → legacy `D:\github\models` → `server\models`.
 3. In the UI pick the **Hunyuan3D 2 mini (Real)** generator. The adapter
    (`server/generators/hunyuan.py`) probes `/health` and POSTs the image to
    `/generate`, saving the returned GLB — no extra config as long as the

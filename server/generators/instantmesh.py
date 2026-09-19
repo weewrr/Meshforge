@@ -152,7 +152,7 @@ class InstantMeshGenerator(BaseGenerator):
                 f'InstantMesh 服务不可达（{self._url}）且自动启动失败 — '
                 f'请先下载权重到 D:/github/models/InstantMesh/（diffusion_pytorch_model.bin + '
                 f'{self.config.split("/")[-1].replace("-", "_")}），并完成环境搭建 '
-                f'（scripts/setup-instantmesh-server.bat，含 nvdiffrast 编译，需 CUDA Toolkit）；'
+                f'（含 nvdiffrast 编译，需 CUDA Toolkit；见 README 部署章节）；'
                 f'查看 workspace/logs/instantmesh-{self.port}.log'
             )
 

@@ -20,10 +20,27 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-# MCP server 依赖后端虚拟环境（torch 等只装在那里），不能直接用系统 python。
-PY = ROOT / "server" / ".venv" / "Scripts" / "python.exe"
 SERVER = ROOT / "server" / "mcp_server.py"
 API_BASE = "http://127.0.0.1:8766"
+
+
+def _resolve_python() -> str:
+    """选择拉起 MCP server 的解释器。
+
+    优先 `server/.venv`（本地开发：mcp / httpx 只装在那里），但 venv 布局
+    随平台不同——POSIX 是 `bin/python`，Windows 是 `Scripts/python.exe`；
+    且 CI 里根本没有 venv（依赖装在 setup-python 的全局环境里）。
+    两种情况都回退到当前解释器 `sys.executable`，脚本因此在 Linux CI 上
+    也能跑（此前硬编码 Windows 路径，CI 上必然 FileNotFoundError）。
+    """
+    for rel in (Path("bin") / "python", Path("Scripts") / "python.exe"):
+        candidate = ROOT / "server" / ".venv" / rel
+        if candidate.is_file():
+            return str(candidate)
+    return sys.executable
+
+
+PY = _resolve_python()
 
 
 async def read_reply(proc: asyncio.subprocess.Process, timeout: float = 30.0) -> dict | None:

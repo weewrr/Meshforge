@@ -25,6 +25,7 @@ import os
 import re
 import socket
 import threading
+from pathlib import Path, PureWindowsPath
 import time
 from http import HTTPStatus
 from pathlib import Path
@@ -107,7 +108,16 @@ def _safe_dest_path(dest_dir: Path, filename: str) -> Path:
         ValueError: 路径不安全。
     """
     rel = Path(filename)
-    if rel.is_absolute() or '..' in rel.parts:
+    # 双视角校验：服务可能跑在 POSIX 或 Windows 上，远端清单是外部输入，
+    # Windows 形态的绝对路径（C:/x、\\srv\share）与反斜杠 `..` 在 POSIX
+    # 视角下不是分隔符、会被误当相对文件名放行——任一视角下为绝对路径
+    # 或含 `..` 段一律拒绝（CI 在 Linux 上跑，test_paths 的断言两平台一致）。
+    if (
+        rel.is_absolute()
+        or '..' in rel.parts
+        or PureWindowsPath(filename).is_absolute()
+        or '..' in PureWindowsPath(filename).parts
+    ):
         raise ValueError(f'unsafe path in repo file list: {filename}')
     final = (dest_dir / rel).resolve()
     if not final.is_relative_to(dest_dir.resolve()):

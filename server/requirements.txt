@@ -11,7 +11,7 @@ uvicorn>=0.30
 # pydantic 被 routers 直接 import（模型校验），显式声明而非依赖 fastapi 传递引入
 pydantic>=2.7
 python-multipart>=0.0.9
-pillow>=10.0
+pillow>=12.3.0
 numpy>=1.26
 trimesh>=4.0
 # 网格工具（processor 节点）QEM 减面 / 孔洞闭合 / 非流形清理

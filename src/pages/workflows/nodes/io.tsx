@@ -21,7 +21,12 @@ export function ImageNode({ id, data }: NodeProps<Node<WFNodeData>>) {
   const t = useT()
   return (
     <NodeShell id={id} type="imageNode" label={data.label}>
-      <ImageFileButton nodeId={id} label={t('workflows.nodes.selectImage')} current={String(data.params.fileName ?? '')} />
+      <ImageFileButton
+        nodeId={id}
+        label={t('workflows.nodes.selectImage')}
+        current={String(data.params.fileName ?? '')}
+        url={String(data.params.url ?? '')}
+      />
     </NodeShell>
   )
 }

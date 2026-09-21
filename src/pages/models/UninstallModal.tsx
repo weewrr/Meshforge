@@ -21,6 +21,10 @@ export function UninstallModal({ ext, busy, error, onCancel, onConfirm }: {
 }) {
   const t = useT()
   const trapRef = useFocusTrap(true, onCancel)
+  // 内置扩展磁盘上没有目录，卸载只会把它从工作流里停用（可恢复）；
+  // 清单扩展才是真删目录。文案必须说清是哪一种，否则用户点完会疑惑
+  // "不是卸载了吗，怎么还能恢复"。
+  const builtin = ext.builtin === true
 
   useEffect(() => {
     // Esc 关闭（处理中时不响应，避免误触打断卸载）。
@@ -44,7 +48,9 @@ export function UninstallModal({ ext, busy, error, onCancel, onConfirm }: {
           </div>
           <div>
             <h2 className="ex-modal__title">{t('models.uninstallTitle', { name: ext.name })}</h2>
-            <p className="ex-modal__sub">{t('models.uninstallDesc')}</p>
+            <p className="ex-modal__sub">
+              {t(builtin ? 'models.uninstallDescBuiltin' : 'models.uninstallDesc')}
+            </p>
           </div>
         </div>
 

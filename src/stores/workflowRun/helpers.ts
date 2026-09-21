@@ -14,6 +14,7 @@ import {
   isContainerType,
   isExecEdge,
   isLoopStarter,
+  paramHandleFor,
   paramIdFromHandle,
   type WFEdge,
   type WFNode,
@@ -79,9 +80,15 @@ export function resolveParamPins(
     if (!out) continue
     const text = String(out.text ?? '')
     const schema = ext.params.find((p) => p.id === pid)
+    // 图片参数的取值通道不是文本：它的 File 由 `mvViewsFrom()` 从引脚上直接拿走，
+    // 若在这里写成 `result[pid] = ''`（图片输出的 `out.text` 是 undefined），
+    // 只会给后端塞一个空串，反而可能覆盖掉同名参数的默认值。
+    if (schema?.type === 'image') continue
     if (schema && (schema.type === 'int' || schema.type === 'float')) {
-      const n = Number(text)
-      // 文本解析不出数字时回退到内联值，再回退到 schema 默认值，
+      // 空文本要按"没给值"处理：Number('') === 0，若直接放行会让一个空上游
+      // 把参数静默压成 0（例如把 steps 变成 0）。
+      const n = text.trim() === '' ? NaN : Number(text)
+      // 解析不出数字时回退到内联值，再回退到 schema 默认值，
       // 保证参数永远是个有效数字而不是 NaN。
       result[pid] = Number.isNaN(n) ? (base[pid] ?? schema.default) : n
     } else {
@@ -199,35 +206,62 @@ export function whileBodyNodes(w: WFNode, nodes: WFNode[]): WFNode[] {
 }
 
 /**
- * 为四视角生成器（Hunyuan3D 2 MV）从上游节点解析这 4 张图。
+ * 从上游产物里按**位置**推断四视角（数组按顺序、单图节点自带 views）。
  *
- * 上游可能是：旧式 图片节点（带 4 视角的 views，Generate 页变通路径），或
- * 新式 数组节点（多张顺序排列的图片）。数组节点时用节点上的 view_<tag>_index
- * 参数（外部映射）指明哪一项是 front/left/back/right；缺省时按顺序 0..3 取用。
+ * 只是 `mvViewsFrom()` 的回退层：接在四个视角引脚上的图片优先级更高。
+ * 数组短于 4 时多出来的视角自然缺省，不会被塞进重复图。
  */
-export function mvViewsFrom(node: WFNode, upstream: NodeOutput): { front: File; views: Partial<Record<MvViewTag, File>> } | null {
-  const params = (node.data?.params ?? {}) as Record<string, unknown>
+function viewsFromUpstream(upstream: NodeOutput | undefined): Partial<Record<MvViewTag, File>> {
+  if (!upstream) return {}
   if (upstream.type === 'image') {
-    if (!upstream.file) return null
-    return { front: upstream.file, views: upstream.views ?? {} }
+    if (!upstream.file) return {}
+    return { front: upstream.file, ...upstream.views }
   }
   if (upstream.type === 'array' && upstream.items && upstream.items.length > 0) {
-    const arr = upstream.items
-    // 按 tag 读外部映射参数；越界或非整数一律视为"未指定"。
-    const itemAt = (tag: MvViewTag): File | undefined => {
-      const n = Number(params[`view_${tag}_index`] ?? '')
-      return Number.isInteger(n) && n >= 0 && n < arr.length ? arr[n] : undefined
-    }
-    // front 是必填项：没显式指定就用第一张。
-    const front = itemAt('front') ?? arr[0]
     const views: Partial<Record<MvViewTag, File>> = {}
-    for (const tag of MV_VIEW_TAGS) {
-      const f = itemAt(tag)
+    MV_VIEW_TAGS.forEach((tag, i) => {
+      const f = upstream.items![i]
       if (f) views[tag] = f
-    }
-    return { front, views }
+    })
+    return views
   }
-  return null
+  return {}
+}
+
+/**
+ * 为四视角生成器（Hunyuan3D 2 MV）解析这 4 张图，分两层取值，前面的层优先：
+ *
+ * 1. **视角引脚**（`p:view_front` / `p:view_left` / `p:view_back` / `p:view_right`）——
+ *    节点上 4 个图片引脚各自直接接一张图片。这是用户手接图片的正路：
+ *    以前这 4 个位置是 `int` 参数（"取上游数组的第几张"），参数引脚的端口类型
+ *    恒为 `text`，图片根本接不进去，等于摆设。
+ * 2. **上游产物**（回退，保持旧工作流可用）——数组节点按顺序取第 1~4 项，
+ *    或单图节点自带 `views`。
+ *
+ * 两层都按 tag 合并，引脚层覆盖回退层；只要最终拿得到 front 就算成功。
+ *
+ * @param node 生成器节点（读它的 `p:view_<tag>` 引脚）
+ * @param upstream 上游产物（`findUpstream` 的结果，可能为空：只接了视角引脚时）
+ * @param edges 所属（子）图的全部边；省略时只走回退层（纯函数单测用）
+ * @returns 组装好的 views，front 缺失时返回 `null`
+ */
+export function mvViewsFrom(
+  node: WFNode,
+  upstream?: NodeOutput,
+  edges: WFEdge[] = []
+): { front: File; views: Partial<Record<MvViewTag, File>> } | null {
+  const views: Partial<Record<MvViewTag, File>> = { ...viewsFromUpstream(upstream) }
+  for (const tag of MV_VIEW_TAGS) {
+    const handle = paramHandleFor(`view_${tag}`)
+    const edge = edges.find((e) => e.target === node.id && e.targetHandle === handle)
+    if (!edge) continue
+    const out = readOutput(edge.source, edge.sourceHandle)
+    // 接到非图片输出（例如变量节点）时该视角视为没接，而不是塞入一个非图片值。
+    if (out?.file) views[tag] = out.file
+  }
+  // front 是必填项：四视图缺正视图就没有可用的重建基准。
+  if (!views.front) return null
+  return { front: views.front, views }
 }
 
 /** 把后端产物 URL 拉成一个 `File`，以便作为 multipart 字段继续提交。 */

@@ -9,6 +9,20 @@
  */
 
 export const en = {
+  // 跨页面复用的通用 UI 文案（关闭 / 撤销 / 附件等按钮与提示）。
+  common: {
+    close: 'Close',
+    undo: 'Undo',
+    expand: 'Expand',
+    remove: 'Remove',
+    attachImage: 'Attach image',
+    autoRotate: 'Auto-rotate',
+    screenshot: 'Screenshot',
+    chatPlaceholder: 'Ask Meshforge…',
+    undoLabel: 'Undo',
+    actionsPerformed: '{count} action performed',
+    actionsPerformedPlural: '{count} actions performed'
+  },
   nav: {
     generate: 'Generate',
     workflows: 'Workflows',
@@ -55,6 +69,7 @@ export const en = {
       storage: 'Storage',
       integrations: 'Integrations',
       performance: 'Performance',
+      modeldl: 'Downloads',
       agent: 'Agent',
       logs: 'Logs',
       about: 'About'
@@ -228,6 +243,30 @@ export const en = {
       copied: 'Copied!',
       copyAll: 'Copy all',
       empty: 'No entries in {file}.log'
+    },
+    modeldl: {
+      title: 'Model Downloads',
+      subtitle: 'Download inference-service weights on demand through the ModelScope CLI. The list header probes whether modelscope is available on this machine.',
+      mscopeOk: 'ModelScope CLI available ({version})',
+      mscopeOkGeneric: 'ModelScope CLI available',
+      mscopeMissing: 'ModelScope CLI not found — run pip install modelscope first (bundled in packaged builds).',
+      installed: 'Installed',
+      notInstalled: 'Not installed',
+      size: 'Size',
+      download: 'Download',
+      downloadUnavailable: 'No repository available',
+      downloading: 'Downloading…',
+      done: 'Download complete',
+      desc: {
+        'hunyuan3d-2': 'Tencent Hunyuan3D-2 — full image-to-3D weights; higher quality than mini, larger VRAM footprint.',
+        'hunyuan3d-2-mini': 'Tencent Hunyuan3D-2 mini — lightweight image-to-3D weights that run on consumer GPUs.',
+        'hunyuan3d-2mv': 'Tencent Hunyuan3D-2 MV — multi-view input variant for high-fidelity view-based reconstruction.',
+        instantmesh: 'InstantMesh — sparse-view large reconstruction model for fast single-image meshes.',
+        'stable-zero123': 'Stable Zero123 — single-image novel-view synthesis feeding multi-view reconstruction.',
+        mvdream: 'MVDream — text/image-to-multi-view diffusion (no single ModelScope repo; HF reference).',
+        'wonder3d-plus': 'Wonder3D Plus — cross-domain diffusion for multi-view normal and color images (HF reference).',
+        imageopt: 'Image optimization toolkit — matting, upscaling and background-removal weights.'
+      }
     },
     about: {
       title: 'About',
@@ -492,6 +531,7 @@ export const en = {
     uninstallAria: 'Uninstall {name}',
     uninstallTitle: 'Uninstall “{name}”?',
     uninstallDesc: 'The extension folder will be permanently deleted from the server.',
+    uninstallDescBuiltin: 'This extension ships with the app, so there is no folder to delete. Uninstalling only hides it from the workflows; you can restore it at any time.',
     downloading: 'Downloading… {pct}%',
     extracting: 'Extracting…',
     validating: 'Validating…',
@@ -526,8 +566,17 @@ export const en = {
     logDownloaded: 'downloaded model weights: {name}',
     logDownloadError: 'model download error: {err}',
     logUninstall: 'uninstall extension: {msg}',
+    logDisabled: 'disable built-in extension: {msg}',
+    logRestore: 'restore extension: {msg}',
+    disabledTitle: 'Disabled built-ins ({n})',
+    disabledHint: 'These ship with the app — uninstalling only hides them from the workflows.',
+    restore: 'Restore',
+    restoreAll: 'Restore all',
+    restoreTitle: 'Restore {name}',
     toast: {
       uninstalled: 'Extension uninstalled',
+      disabled: 'Built-in extension disabled — restore it anytime from this page',
+      restored: 'Extension restored',
       downloaded: 'Downloaded model weights: {name}',
       downloadFail: 'Model download failed'
     }
@@ -634,6 +683,7 @@ export const en = {
       foldToFunction: 'Collapse to Function (subgraph)',
       expandFunction: 'Expand function',
       nodeToggleBreakpoint: 'Toggle breakpoint',
+      paneAddNode: 'Add node',
       pinMenuTitle: 'Pin connections',
       pinDeleteEdge: 'Delete this wire',
       pinDeleteAll: 'Delete all wires on this pin',
@@ -665,12 +715,18 @@ export const en = {
     },
     help: {
       title: 'Workflow Guide',
-      openPanel: 'Open node panel (search / Enter to add)',
+      openPanel: 'Double-click empty canvas space to open the node panel (search / Enter to add)',
+      pan: 'Hold Space and drag to pan the canvas; middle-drag also pans',
       undoRedo: 'Undo / Redo',
       newWorkflow: 'New workflow',
       closeTab: 'Close current tab',
       switchTab: 'Switch tab',
       deleteNode: 'Delete selected node or edge',
+      interruptEdge: 'Alt + left-click an edge to break that connection',
+      frameSelection: 'Focus the selected nodes (or the whole graph when none selected)',
+      commentGroup: 'Box the selected nodes into a comment frame',
+      altReconnect: 'Hold Alt and drag onto an occupied input to replace its wire',
+      pinAdd: 'Hover a node and click the “+” beside a pin to insert a node wired automatically',
       drag: 'Drag from the right panel onto the canvas; moving a node creates an undo record',
       connect: 'Drag from the right port of a node to the left port of another; colors indicate data types',
       waitNode: 'Run pauses here; click “Continue” on the node to resume',
@@ -682,13 +738,49 @@ export const en = {
       duplicated: 'Workflow duplicated',
       saveFail: 'Save failed — changes may not be persisted',
       foldBlocked: 'Cannot fold: data nodes only',
+      foldBlockedDetail:
+        'Only top-level data nodes can be collapsed (containers/comment frames and their children, flow control, and function anchors are excluded)',
       foldDone: 'Collapsed to function',
-      unfoldDone: 'Function expanded'
+      unfoldDone: 'Function expanded',
+      pinAdded: 'Pin added'
+    },
+    // 运行期日志 / 预检问题。这些字符串出现在运行日志面板与节点错误里，
+    // 全部经 getT() 取词，避免英文界面漏出中文。
+    runLog: {
+      noImageSelected: '{label}: no image selected',
+      noCurrentMesh: '{label}: no current mesh in the 3D viewer',
+      noMeshFileSelected: '{label}: no mesh file selected',
+      noGeneratorSelected: '{label}: no generator selected',
+      needsImageUpstream: '{label}: needs an upstream image connection',
+      needsUpstreamImage: '{label}: needs an upstream image connection',
+      needsUpstreamMesh: '{label}: needs an upstream mesh connection',
+      unknownExtension: '{label}: unknown extension',
+      missingInput: '{label}: missing input connection',
+      varNameNotSet: 'preflight: {label}: variable name not set',
+      varUndeclared: 'preflight: {label}: variable “{name}” is not declared by any Set node',
+      eventNameNotSet: 'preflight: {label}: event name not set',
+      mvNeedsUpstream: '{label}: Multi-View needs an upstream Multi-View Images or Array node',
+      selectNoInput: '{label}: Select has no available input — no output this run',
+      varWriteSkipped: '{label}: variable name not set — write ignored',
+      eventBindSkipped: '{label}: event name not set — binding ignored',
+      eventCalled: '{label}: called event “{name}” ({count} binding(s))',
+      emptySubgraph: '{label}: subgraph is empty',
+      depthExceeded: 'Subgraph nesting exceeds {depth} levels — stopped descending',
+      paused: '{label}: paused — Step / Continue',
+      pausedContinue: '{label}: paused — Continue or Retry',
+      noBindings: '{label}: event “{name}” has no Bindings'
     },
     nodes: {
       importing: 'Importing…',
       noFileSelected: 'No file selected',
       selectImage: 'Select Image',
+      replaceImage: 'Replace Image',
+      clearImage: 'Clear Image',
+      pinOnlyHintNumber: 'Default {value} · override with a number variable on the pin',
+      pinOnlyHintText: 'Default {value} · override with a text variable on the pin',
+      pinOnlyHintImage: 'Wire an image into the pin on the left',
+      collapseNode: 'Collapse node',
+      expandNode: 'Expand node',
       addImage: 'Add Image',
       remove: 'Remove',
       selectMeshFile: 'Select Mesh File',

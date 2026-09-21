@@ -9,7 +9,7 @@
  * 保存 / 快捷键 / 层级跳转的主体逻辑。
  */
 
-import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -48,6 +48,7 @@ import WorkflowEdge from '../WorkflowEdge'
 import PinMenu, { pinFromEvent, type PinTarget } from '../PinMenu'
 import { nodeTypes, SubgraphOpsContext, SubgraphPatchContext, type SubgraphOps } from '../nodes'
 import { setSubEditorOpen } from '../subEditorState'
+import { toast } from '../../../stores/toasts'
 import { useT } from '../../../i18n'
 
 import { EditorBar } from './EditorBar'
@@ -73,7 +74,9 @@ export function EditorInner({ path, onClose, onDescend, onJump }: Props) {
   const current = useWorkflowsStore((s) => s.current)
   const replaceSubgraphGraph = useWorkflowsStore((s) => s.replaceSubgraphGraph)
   const renameSubgraphAt = useWorkflowsStore((s) => s.renameSubgraphAt)
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, fitView } = useReactFlow()
+  // 子图编辑器内 Alt 重连（UE 语义：新线替代指到同一输入口的旧线）。
+  const connectAltRef = useRef(false)
   const canvasBg = theme === 'light' ? '#e9eef5' : '#0a0e18'
   const gridMinor = theme === 'light' ? 'rgba(30, 90, 150, 0.14)' : 'rgba(96, 165, 250, 0.1)'
   const gridMajor = theme === 'light' ? 'rgba(23, 90, 140, 0.26)' : 'rgba(125, 211, 252, 0.16)'
@@ -185,6 +188,7 @@ export function EditorInner({ path, onClose, onDescend, onJump }: Props) {
     snapshot()
     const pin = createSubgraphPin('in', inputPins.length, { x: 40, y: 40 + inputPins.length * 44 })
     setNodes((ns) => [...ns, pin])
+    toast.success(t('workflows.toast.pinAdded'), { duration: 1500 })
   }
 
   /** 新增一个输出挂点（函数多一个出参）。 */
@@ -196,6 +200,7 @@ export function EditorInner({ path, onClose, onDescend, onJump }: Props) {
       y: 40 + outputPins.length * 44
     })
     setNodes((ns) => [...ns, pin])
+    toast.success(t('workflows.toast.pinAdded'), { duration: 1500 })
   }
 
   function handleNodeDoubleClick(_e: unknown, node: WFNode): void {
@@ -281,6 +286,20 @@ export function EditorInner({ path, onClose, onDescend, onJump }: Props) {
         saveAndClose()
         return
       }
+      // UE 蓝图快捷键（针对子图内选中）：F = 帧选中；C = 收进注释框。
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault()
+        const groupable = nodes.filter((n) => selectedIds.includes(n.id) && !isFoldBlocked(n))
+        fitView({ nodes: groupable.length > 0 ? groupable : nodes, padding: 0.3, duration: 250 })
+        return
+      }
+      if (e.key === 'c' || e.key === 'C') {
+        if (selectedIds.length === 0) return
+        e.preventDefault()
+        ops2.groupAsComment(selectedIds, t('workflows.palette.commentLabel'))
+        return
+      }
       const dirs: Record<string, [number, number]> = {
         ArrowLeft: [-1, 0],
         ArrowRight: [1, 0],
@@ -302,7 +321,7 @@ export function EditorInner({ path, onClose, onDescend, onJump }: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, nodes, edges, path, undoLocal, redoLocal])
+  }, [selectedIds, nodes, edges, path, undoLocal, redoLocal, fitView, ops2])
 
   // ─── 右键菜单 ──────────────────────────────────────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; ids: string[] } | null>(null)
@@ -415,17 +434,37 @@ export function EditorInner({ path, onClose, onDescend, onJump }: Props) {
               edgeTypes={edgeTypes}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
+              // UE 蓝图式：Alt + 左键点击连线 → 打断该连线（作用于本地草稿，先入栈可撤销）。
+              onEdgeClick={(e, edge) => {
+                if (e.altKey) {
+                  snapshot()
+                  setEdges((es) => es.filter((x) => x.id !== edge.id))
+                }
+              }}
               onNodeDragStart={() => snapshot()}
               onNodeDragStop={handleNodeDragStop}
-              onConnectStart={() => setConnecting(true)}
+              onConnectStart={(e) => {
+                setConnecting(true)
+                // onConnect 拿不到原始事件，只能在按下瞬间捕捉 Alt。
+                connectAltRef.current = e instanceof MouseEvent && e.altKey
+              }}
               onConnectEnd={() => setConnecting(false)}
               onConnect={(c: Connection) => {
+                // UE 蓝图语义：按住 Alt 连到已占用的输入口 → 新线替代旧线。
+                if (connectAltRef.current && c.target) {
+                  setEdges((es) => es.filter((x) => !(x.target === c.target && x.targetHandle === c.targetHandle)))
+                }
+                connectAltRef.current = false
                 snapshot()
                 setEdges((es) => [...es, { id: `e-${crypto.randomUUID()}`, ...c, animated: false }])
               }}
               onNodeDoubleClick={handleNodeDoubleClick}
               onNodeContextMenu={handleNodeContextMenu}
               defaultEdgeOptions={{ type: 'workflowEdge' }}
+              // UE 蓝图式交互：左键拖空白=框选，中键/空格+拖拽=平移画布（空格平移为 ReactFlow 内置）。
+              selectionOnDrag
+              panOnDrag={[1]}
+              selectionKeyCode="Shift"
               deleteKeyCode="Delete"
               multiSelectionKeyCode={['Shift', 'Meta', 'Control']}
               fitView

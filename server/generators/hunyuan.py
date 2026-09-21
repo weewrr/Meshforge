@@ -173,9 +173,18 @@ class Hunyuan3DGenerator(BaseGenerator):
     display_name = 'Hunyuan3D 2 mini (Real)'
     input_type = 'image'
     output_type = 'mesh'
+    # 数字参数一律以 pin_only 形式出现：节点上不摆输入框（默认值足够日常使用），
+    # 要改就从左侧引脚喂一个数值变量——执行时 resolveParamPins 会按 schema 的
+    # int/float 把引脚上的文本协调成数字，空文本按"没给值"回退到默认值。
+    # 下拉框（重建分辨率 / 去底部圆盘）不在此列：它的"选项"本身就是信息，
+    # 摆成一行文字反而看不懂，故仍保留控件。
     params = [
-        {'id': 'steps', 'label': '采样步数', 'type': 'int', 'default': 20, 'min': 5, 'max': 100},
-        {'id': 'guidance', 'label': '引导强度', 'type': 'float', 'default': 4.0, 'min': 1.0, 'max': 10.0},
+        {'id': 'steps', 'label': '采样步数', 'type': 'int', 'default': 20, 'min': 5, 'max': 100,
+         'pin_only': True,
+         'tooltip': '扩散采样步数：越大越细腻但越慢；默认 20 适合快速出模'},
+        {'id': 'guidance', 'label': '引导强度', 'type': 'float', 'default': 4.0, 'min': 1.0, 'max': 10.0,
+         'pin_only': True,
+         'tooltip': 'CFG 引导强度：越大越贴合输入图，过高可能过饱和'},
         {'id': 'octree', 'label': '重建分辨率', 'type': 'select', 'default': 256,
          'options': [
              {'value': 256, 'label': '标准 256（省显存）'},
@@ -184,6 +193,7 @@ class Hunyuan3DGenerator(BaseGenerator):
          ],
          'tooltip': '体积重建分辨率：越高表面细节越丰富，显存与耗时随之增加'},
         {'id': 'seed', 'label': '随机种子', 'type': 'int', 'default': -1, 'min': -1, 'max': 999_999_999,
+         'pin_only': True,
          'tooltip': '-1 = 每次随机；固定为某个正数可复现同一结果，换种子多试几次挑最佳'},
         {'id': 'remove_base', 'label': '去底部圆盘', 'type': 'select', 'default': 1,
          'options': [

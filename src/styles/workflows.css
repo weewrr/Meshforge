@@ -143,6 +143,27 @@
   align-items: center;
 }
 
+/* 工具栏按钮统一盒模型 ────────────────────────────────────────────────────────
+   同一行里的按钮必须等高 —— 层次靠**配色**表达，不该靠**高度**。
+
+   `.primary` / `.ghost`（shell.css）是**颜色修饰类**：故意不带尺寸，好在弹窗等
+   基础尺寸的按钮上直接复用。但它们单独放进工具栏时就会回落到 `button` 的
+   8px / 14px / 13px，比邻居的 6px / 12px 胖一圈（「查看器」「继续」都是这个原因）。
+   就算尺寸拉齐还有两处 2px 的差：`.primary` 无边框（基础 `button { border: none }`
+   没被补回来），纯图标的 `.wf-tool-btn` 内容盒只有 14px（svg）而带文字的按钮是
+   16px 行盒 —— 一行三个按钮能凑出三种高度。
+
+   选择器写成「工具栏里的任何按钮」，是一条**不变量**：以后往工具栏里塞按钮
+  （哪怕是新加的颜色类）都自动对齐，不用记得挑类名。不要往这里加横向 padding，
+   各按钮的文字宽度不同，横向本就该按内容排。 */
+.wf-toolbar__actions > button {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  min-height: 30px;
+}
+
 .wf-toolbar__spacer {
   flex: 1;
 }
@@ -1016,6 +1037,38 @@
   padding-top: 2px;
 }
 
+/* ─── 折叠态的扩展节点（UE 蓝图式"收起来"）────────────────────────────────────
+   收起来后参数区只剩"有连线"的参数，每行退化成一行紧凑的「引脚 + 标签」：
+   没有输入框、没有第二行提示，整节点高度降到标题栏量级。
+   空引脚由 NodeShell / ExtensionNode 直接不渲染，这里只负责剩下的排版。 */
+.wf-ext-params--folded {
+  gap: 2px;
+  padding-top: 0;
+}
+
+.wf-param--wired {
+  display: flex;
+  align-items: center;
+  min-height: 16px;
+}
+
+/* 折叠行里的参数名：单行省略，不折行（折行会把"紧凑"又撑回去）。 */
+.wf-param__wired {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 折叠后若一个引脚都没连线，节点体就是空的——别让 8px 内边距再撑出一截空白。 */
+.wf-node--collapsed .wf-node__body:empty {
+  display: none;
+}
+
 /* ─── While container (Modly parity) ─────────────────────────────────────── */
 .wf-while {
   position: relative;
@@ -1200,6 +1253,43 @@
   text-overflow: ellipsis;
 }
 
+/* 单图节点已选图片的回显：缩略图容器 + 右上角清除按钮 */
+.wf-upload__preview {
+  position: relative;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-hover);
+  line-height: 0;
+}
+
+.wf-upload__preview img {
+  width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  display: block;
+}
+
+.wf-upload__clear {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.wf-upload__clear:hover {
+  background: var(--danger);
+}
+
 /* 数组节点：可变数量图片槽 */
 .wf-array {
   display: flex;
@@ -1284,7 +1374,7 @@
 
 .wf-array__remove:hover {
   background: var(--bg-hover);
-  color: #f87171;
+  color: var(--danger);
 }
 
 .wf-handle {
@@ -1317,6 +1407,34 @@
 }
 .wf-handle--exec:hover {
   transform: rotate(45deg) scale(1.4);
+}
+
+/* 数据引脚旁的「+」快速加节点按钮（UE 蓝图式插入；悬停节点时浮现）。
+   绝对定位相对 .react-flow__node（与 wf-handle 同一坐标基准）。 */
+.wf-addpin {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  background: var(--bg-overlay);
+  color: var(--text-quiet);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  z-index: 3;
+}
+.wf-node:hover .wf-addpin {
+  opacity: 1;
+}
+.wf-addpin:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--bg-panel);
 }
 
 /* UE 选中橙色描边（替代默认青色）——一眼能认出当前选择的节点。 */
@@ -1987,6 +2105,11 @@
   position: fixed;
   inset: 0;
   z-index: 900;
+  /* 无边框窗口的自绘标题栏带 -webkit-app-region: drag（顶部 36px 全宽）。
+     本编辑器 fixed inset:0 会把它盖住，但 Electron 的拖拽区按矩形合并、
+     不看 z-index——盖在上面的内容若不显式 no-drag，顶部 36px 内的
+     鼠标事件仍会被拖拽区吞掉：返回/添加输入/添加输出连 hover 都没有。 */
+  -webkit-app-region: no-drag;
   display: flex;
   flex-direction: column;
   background: var(--bg-app);
@@ -1994,6 +2117,8 @@
 }
 
 .wf-subeditor__bar {
+  position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2013,6 +2138,11 @@
   flex: 1;
   min-height: 0;
   position: relative;
+  /* 独立 stacking context + 裁切：把 ReactFlow 内部各种绝对定位的控件
+     (Controls/MiniMap/Panel/连接层) 限制在本画布内，永不溢出覆盖顶部工具条，
+     否则其内的高 z-index 元素会盖住「返回/添加输入/添加输出」使其点不到。 */
+  isolation: isolate;
+  overflow: hidden;
 }
 
 .wf-subeditor__menu {
@@ -2282,10 +2412,49 @@
   position: relative;
 }
 
-/* 参数引脚比数据引脚更小巧（左侧，与参数行对齐）。 */
+/* 参数引脚比数据引脚更小巧（左侧，与参数行对齐）。
+   左移 10px 用来抵消 `.wf-node__body` 的 10px 水平内边距：参数引脚挂在
+   `.wf-param`（position: relative）上，若不抵消，它就会悬在节点**内部** 11px 处，
+   正好压住同一行的参数文字。抵消后它与数据引脚落在同一竖列（贴节点左边缘），
+   几何关系与「数据引脚 ↔ 标题文字」完全一致。
+   `!important` 是为了压过 xyflow 的 `.react-flow__handle-left { left: 0 }`，
+   免得胜负取决于两张样式表的打包顺序。 */
 .wf-handle--param {
   width: 7px !important;
   height: 7px !important;
+  left: -10px !important;
+}
+
+/* ─── 无输入框的参数行（说明型 label / 仅引脚 pin_only）────────────────────────
+   这两种参数都不该摆输入框：前者是纯说明（打了字也没用），后者默认值够用、
+   要改就从引脚喂变量。因此这里只留一行安静的说明文字。 */
+
+.wf-param--note {
+  padding: 1px 0;
+}
+
+/* 说明型参数正文：多行折行，字号比参数标签更小、更淡，一眼可辨"这是提示不是字段"。 */
+.wf-param__note {
+  display: block;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  opacity: 0.85;
+  word-break: break-word;
+}
+
+/* 仅引脚参数：标签下方跟一行"默认 N · 可由引脚传入 xx 变量"。 */
+.wf-field--pinonly {
+  gap: 2px;
+}
+
+.wf-field__hint {
+  font-size: 10px;
+  line-height: 1.4;
+  font-style: italic;
+  color: var(--text-muted);
+  opacity: 0.75;
+  word-break: break-word;
 }
 
 /* ─── Blueprint exec 连线 / 选中色（主题自适应）──────────────────────────────── */
@@ -2340,13 +2509,47 @@
   background: var(--bg-hover);
 }
 
+/* ─── 节点折叠开关（标题栏右端的小箭头）────────────────────────────────────────
+   朝上 = 点一下折起来；折叠后 CSS 转 180° 朝下（= 点一下展开）。
+   平时半透明，鼠标进节点才浮出来，免得每个节点右上角都挂个显眼的按钮。 */
+.wf-node__fold {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.12s, background 0.12s, color 0.12s;
+}
+
+.wf-node:hover .wf-node__fold,
+.wf-node__fold:focus-visible {
+  opacity: 1;
+}
+
+.wf-node__fold:hover {
+  background: var(--bg-hover);
+  color: var(--text-bright2);
+}
+
+.wf-node--collapsed .wf-node__fold {
+  transform: rotate(180deg);
+}
+
 /* ─── 断点标记（调试）─────────────────────────────────────────────────────────── */
 .wf-bp-dot {
   flex: none;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ef4444;
+  background: var(--danger-solid2);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 6px rgba(239, 68, 68, 0.8);
 }
 
@@ -2457,13 +2660,14 @@
 [data-connecting='1'] .react-flow__handle.connectingto.valid {
   transform: scale(1.8);
   animation: none;
-  box-shadow: 0 0 0 1px var(--bg-app), 0 0 0 3px #34d399, 0 0 14px #34d399;
+  box-shadow: 0 0 0 1px var(--bg-app), 0 0 0 3px var(--success-bright), 0 0 14px var(--success-bright);
   z-index: 4;
 }
 [data-connecting='1'] .react-flow__handle.connectingto:not(.valid) {
   transform: scale(1.6);
   animation: none;
-  box-shadow: 0 0 0 1px var(--bg-app), 0 0 0 3px #ef4444, 0 0 12px rgba(239, 68, 68, 0.7);
+  box-shadow: 0 0 0 1px var(--bg-app), 0 0 0 3px var(--danger-solid2),
+    0 0 12px color-mix(in srgb, var(--danger-solid2) 70%, transparent);
   z-index: 4;
 }
 /* exec 引脚是旋转 45° 的白色菱形，放大时必须带上 rotate。选择器用 .wf-handle--exec

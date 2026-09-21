@@ -11,12 +11,18 @@ import { useT } from '../../i18n'
 export default function HelpModal({ onClose }: { onClose: () => void }) {
   const t = useT()
   const rows: [string, string][] = [
-    ['Space', t('workflows.help.openPanel')],
+    ['Space + Drag', t('workflows.help.pan')],
+    ['Double-click', t('workflows.help.openPanel')],
     ['Ctrl + Z / Ctrl + Y', t('workflows.help.undoRedo')],
     ['Ctrl + T', t('workflows.help.newWorkflow')],
     ['Ctrl + W', t('workflows.help.closeTab')],
     ['Ctrl + Tab', t('workflows.help.switchTab')],
     ['Delete', t('workflows.help.deleteNode')],
+    ['Alt + Click edge', t('workflows.help.interruptEdge')],
+    ['F', t('workflows.help.frameSelection')],
+    ['C', t('workflows.help.commentGroup')],
+    ['Alt + Connect', t('workflows.help.altReconnect')],
+    ['Pin +', t('workflows.help.pinAdd')],
     ['Drag', t('workflows.help.drag')],
     ['Connect', t('workflows.help.connect')],
     ['Wait node', t('workflows.help.waitNode')]

@@ -1,9 +1,24 @@
+# MeshForge 后端运行时依赖（唯一事实来源 —— CI 直接引用本文件，不要再在 workflow 里硬编码包名）
+#
+# 安装：
+#   server/.venv/Scripts/python.exe -m pip install -r server/requirements.txt
+#
+# 注意：requirements-mcp.txt 与 requirements-hunyuan.txt 是**可选**依赖
+# （MCP stdio server / Hunyuan3D 推理服务），本文件不含它们。
+
 fastapi>=0.115
 uvicorn>=0.30
+# pydantic 被 routers 直接 import（模型校验），显式声明而非依赖 fastapi 传递引入
+pydantic>=2.7
 python-multipart>=0.0.9
 pillow>=10.0
 numpy>=1.26
 trimesh>=4.0
 # 网格工具（processor 节点）QEM 减面 / 孔洞闭合 / 非流形清理
 pymeshlab>=2023.12
+# 系统监控（system_stats 路由）
 psutil>=5.9
+# ModelScope 模型下载 CLI —— 设置页「模型下载」分区用 modelscope download 拉取
+# 外部 AI 服务（Hunyuan3D / InstantMesh / Zero123 …）的权重。随后端 venv 一起
+# 安装，打包/部署即一并带上（见 13.x 模型下载节点）。
+modelscope>=1.17

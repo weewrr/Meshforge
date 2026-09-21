@@ -39,6 +39,12 @@ export interface Ext {
   author?: string
   /** 是否来自官方 / 内置，决定"官方"筛选与可信标记。 */
   trusted: boolean
+  /**
+   * 是否为代码内置扩展（磁盘无目录）。内置项的卸载只是**停用**：会被记进后端的
+   * 停用表，跨重启保持隐藏，并可从模型页顶部的"已停用"条带恢复；
+   * 非内置（清单扩展）的卸载是真删目录。卸载弹窗据此切换说明文案。
+   */
+  builtin?: boolean
   /** 该扩展暴露的节点列表。 */
   nodes: ExtNode[]
   /** 是否已在服务端加载就绪。 */
@@ -101,6 +107,7 @@ export function toExt(e: WorkflowExtension): Ext {
       : getT('models.descProcessTool'),
     author: 'meshforge',
     trusted: BUILTIN_IDS.has(e.id),
+    builtin: e.builtin === true,
     nodes: [{ id: e.id, name: e.display_name, input: e.input, output: e.output }],
     loaded: true,
     category: e.category,
@@ -108,4 +115,16 @@ export function toExt(e: WorkflowExtension): Ext {
     hfSkipPrefixes: e.hfSkipPrefixes,
     hfIncludePrefixes: e.hfIncludePrefixes
   }
+}
+
+/** 已停用（可恢复）的内置扩展——后端 `GET /extensions/disabled` 的单项视图。 */
+export interface DisabledExt {
+  /** 扩展 id。 */
+  id: string
+  /** 显示名。 */
+  name: string
+  /** 类别：模型生成器或网格处理工具。 */
+  kind: 'model' | 'process'
+  /** 更细的分类（生视图 / 图像 / 网格 / 处理）。 */
+  category?: string
 }

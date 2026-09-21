@@ -9,11 +9,12 @@
 import {
   createContext,
   useContext,
+  useMemo,
   useState,
   type CSSProperties,
   type ReactNode
 } from 'react'
-import { Handle, Position } from '@xyflow/react'
+import { Handle, Position, useStore } from '@xyflow/react'
 import {
   EXEC_IN_HANDLE,
   EXEC_OUT_HANDLE,
@@ -31,8 +32,9 @@ import {
 import { useWorkflowsStore } from '../../../stores/workflows'
 import { useWorkflowRunStore, type NodeState } from '../../../stores/workflowRun'
 import { useLogsStore } from '../../../stores/logs'
-import { importImageByPath, importMeshByPath } from '../../../api'
+import { fullUrl, importImageByPath, importMeshByPath } from '../../../api'
 import { useT } from '../../../i18n'
+import { requestPinAdd } from '../pinAdd'
 
 // ─── Breakpoints (调试) ───────────────────────────────────────────────────────
 
@@ -49,6 +51,34 @@ export function BreakpointDot({ id }: { id: string }) {
   return <span className="wf-bp-dot" title={t('workflows.nodes.breakpointTitle')} aria-label={t('workflows.nodes.breakpointTitle')} />
 }
 
+// ─── 连线状态（折叠时只保留"有连接"的引脚）──────────────────────────────────
+
+/**
+ * 该节点上**真正接了线**的 handle，target / source 分开记。
+ *
+ * 画布的 `edges` 是受控的（由 store 传入 `<ReactFlow>`），React Flow 会把它同步进
+ * 自己的内部 store，所以这里读 store 就能拿到与画布一致的连线集合；
+ * 子图编辑器有自己的 store，会自动读到草稿那份，不必区分两套来源。
+ *
+ * 历史工作流里 `targetHandle` 可能是 null（早期连主引脚时不写 handle），
+ * 这种一律按主数据引脚计，免得折叠后"有连接的主引脚"被当成没连接藏起来。
+ *
+ * @param id 节点 id
+ * @returns `targets` = 有入边的 target handle 集合；`sources` = 有出边的 source handle 集合
+ */
+export function useConnectedHandles(id: string): { targets: Set<string>; sources: Set<string> } {
+  const edges = useStore((s) => s.edges)
+  return useMemo(() => {
+    const targets = new Set<string>()
+    const sources = new Set<string>()
+    for (const e of edges) {
+      if (e.target === id) targets.add(e.targetHandle ?? IN_HANDLE)
+      if (e.source === id) sources.add(e.sourceHandle ?? OUT_HANDLE)
+    }
+    return { targets, sources }
+  }, [edges, id])
+}
+
 // ─── Shell ────────────────────────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<NodeState, string> = {
@@ -60,23 +90,36 @@ const STATUS_LABEL: Record<NodeState, string> = {
   skipped: 'skip'
 }
 
-/** 通用节点外壳：标题栏（断点/色点/标题/运行状态）、执行与数据引脚、进度条。 */
+/** 通用节点外壳：标题栏（折叠/断点/色点/标题/运行状态）、执行与数据引脚、进度条。
+ *
+ *  可折叠（UE 蓝图式"收起来"）：传了 `onToggleCollapse` 就在标题栏右端出现一个朝上的
+ *  小箭头，点一下把节点体收上去。折叠态下**只保留有连线的引脚** —— 空引脚折叠后既没有
+ *  内容可看、也没有线可连，留着只会让相邻节点误以为这里还有接口。 */
 export function NodeShell({
   id,
   type,
   label,
   children,
-  extensionId
+  extensionId,
+  collapsed = false,
+  onToggleCollapse
 }: {
   id: string
   type: string
   label: string
   children?: ReactNode
   extensionId?: string | null
+  /** 是否处于折叠态（由持有折叠状态的节点组件传入）。 */
+  collapsed?: boolean
+  /** 点击标题栏箭头时的回调；不给就不显示箭头（该节点不可折叠）。 */
+  onToggleCollapse?: () => void
 }) {
+  const t = useT()
   const spec = nodeSpec(type)
   const state = useWorkflowRunStore((s) => s.nodeStates[id] ?? 'pending')
   const progress = useWorkflowRunStore((s) => s.nodeProgress[id] ?? 0)
+  // 引脚是否"有连接"与节点体是否显示是同一份判据，故在壳里统一算。
+  const conn = useConnectedHandles(id)
 
   // 扩展节点的引脚是动态的：引脚类型取自扩展 schema 而非静态 nodeSpec。
   const ports = type === 'extensionNode' ? nodePorts(type, extensionId) : { inputs: spec.inputs, output: spec.output }
@@ -90,18 +133,27 @@ export function NodeShell({
   // 流程/控制节点带白色执行引脚，插在顶栏两端（Unreal Blueprint exec 引脚）。
   const exec = isExecNode(type)
 
+  // 折叠态：主引脚只在真有连线时保留。
+  const showIn = hasIn && (!collapsed || conn.targets.has(IN_HANDLE))
+  const showOut = hasOut && (!collapsed || conn.sources.has(OUT_HANDLE))
+  const showExecIn = exec && (!collapsed || conn.targets.has(EXEC_IN_HANDLE))
+  const showExecOut = exec && (!collapsed || conn.sources.has(EXEC_OUT_HANDLE))
+
   return (
-    <div className={`wf-node wf-node--${state}`} style={{ '--node-color': nodeColor } as CSSProperties}>
-      {exec && (
-        <>
-          <Handle id={EXEC_IN_HANDLE} type="target" position={Position.Left} className="wf-handle wf-handle--exec" style={{ top: '8px' }} />
-          <Handle id={EXEC_OUT_HANDLE} type="source" position={Position.Right} className="wf-handle wf-handle--exec" style={{ top: '8px' }} />
-        </>
+    <div
+      className={`wf-node wf-node--${state}${collapsed ? ' wf-node--collapsed' : ''}`}
+      style={{ '--node-color': nodeColor } as CSSProperties}
+    >
+      {showExecIn && (
+        <Handle id={EXEC_IN_HANDLE} type="target" position={Position.Left} className="wf-handle wf-handle--exec" style={{ top: '8px' }} />
       )}
-      {hasIn && (
+      {showExecOut && (
+        <Handle id={EXEC_OUT_HANDLE} type="source" position={Position.Right} className="wf-handle wf-handle--exec" style={{ top: '8px' }} />
+      )}
+      {showIn && (
         <Handle id={IN_HANDLE} type="target" position={Position.Left} className="wf-handle" style={{ background: portColor(inType) }} />
       )}
-      {hasOut && (
+      {showOut && (
         <Handle id={OUT_HANDLE} type="source" position={Position.Right} className="wf-handle" style={{ background: portColor(outType) }} />
       )}
       <div className="wf-node__header">
@@ -113,7 +165,33 @@ export function NodeShell({
             {STATUS_LABEL[state]}
           </span>
         )}
+        {onToggleCollapse && (
+          // 朝上的箭头 = 折起来；折叠后由 CSS 转 180° 朝下（= 展开）。
+          <button
+            type="button"
+            className="wf-node__fold nodrag"
+            title={t(collapsed ? 'workflows.nodes.expandNode' : 'workflows.nodes.collapseNode')}
+            aria-label={t(collapsed ? 'workflows.nodes.expandNode' : 'workflows.nodes.collapseNode')}
+            aria-expanded={!collapsed}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              // 不让节点拖拽 / 双击进子图接管这次点击。
+              e.stopPropagation()
+              onToggleCollapse()
+            }}
+          >
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 15l6-6 6 6" />
+            </svg>
+          </button>
+        )}
       </div>
+      {!collapsed && hasIn && (
+        <AddPinBtn nodeId={id} handleType="target" handleId={IN_HANDLE} style={{ left: -16, top: 'calc(50% - 24px)' }} />
+      )}
+      {!collapsed && hasOut && (
+        <AddPinBtn nodeId={id} handleType="source" handleId={OUT_HANDLE} style={{ right: -16, top: 'calc(50% - 24px)' }} />
+      )}
       <div className="wf-node__body">{children}</div>
       {state === 'running' && progress > 0 && progress < 1 && (
         <div className="wf-node__progress">
@@ -121,6 +199,40 @@ export function NodeShell({
         </div>
       )}
     </div>
+  )
+}
+
+/** 数据引脚的「+」快加节点按钮（UE 蓝图式快速插入）。点击后在引脚旁打开
+ *  节点面板并自动接线。子图编辑器内不渲染——它的节点面板走 EditorBar。 */
+function AddPinBtn({
+  nodeId,
+  handleType,
+  handleId,
+  style
+}: {
+  nodeId: string
+  handleType: 'source' | 'target'
+  handleId: string | null
+  style: CSSProperties
+}) {
+  const inSubeditor = useContext(SubgraphPatchContext) !== null
+  if (inSubeditor) return null
+  return (
+    <button
+      className="wf-addpin"
+      style={style}
+      title="Add node"
+      aria-label="Add node"
+      onClick={(e) => {
+        // 不让节点拖拽 / 节点双击接管这次点击。
+        e.stopPropagation()
+        requestPinAdd({ nodeId, handleType, handleId, clientX: e.clientX, clientY: e.clientY })
+      }}
+    >
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    </button>
   )
 }
 
@@ -162,11 +274,14 @@ export function ImageFileButton({
   nodeId,
   label,
   current,
+  url,
   onUploaded
 }: {
   nodeId: string
   label: string
   current?: string
+  /** 已导入图片的相对 URL（`data.params.url`）；有值时渲染缩略图与清除入口。 */
+  url?: string
   onUploaded?: (fileName: string) => void
 }) {
   const t = useT()
@@ -185,8 +300,8 @@ export function ImageFileButton({
     if (!filePath) return
     setBusy(true)
     try {
-      const { url, fileName } = await importImageByPath(filePath)
-      setParam('url', url)
+      const { url: nextUrl, fileName } = await importImageByPath(filePath)
+      setParam('url', nextUrl)
       setParam('fileName', fileName)
       onUploaded?.(fileName)
       useLogsStore.getState().log('info', `[imageNode] imported ${fileName}`)
@@ -198,14 +313,35 @@ export function ImageFileButton({
     }
   }
 
+  /** 撤销已选图片：url 与 fileName 一并置空，节点回到「未选择」状态。 */
+  function clearImage(): void {
+    setParam('url', '')
+    setParam('fileName', '')
+    onUploaded?.('')
+    useLogsStore.getState().log('info', '[imageNode] cleared')
+  }
+
   return (
     <div className="wf-upload">
+      {url ? (
+        <div className="wf-upload__preview">
+          <img src={fullUrl(url)} alt={current || ''} />
+          <button
+            className="wf-upload__clear nodrag"
+            onClick={clearImage}
+            title={t('workflows.nodes.clearImage')}
+            aria-label={t('workflows.nodes.clearImage')}
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
       <button
         className="wf-upload__btn"
         disabled={busy}
         onClick={() => void pickFromDisk()}
       >
-        {busy ? t('workflows.nodes.importing') : label}
+        {busy ? t('workflows.nodes.importing') : url ? t('workflows.nodes.replaceImage') : label}
       </button>
       <span className="wf-upload__name">{current || t('workflows.nodes.noFileSelected')}</span>
     </div>

@@ -10,6 +10,20 @@
 import type { en } from './en'
 
 export const zh: typeof en = {
+  // 跨页面复用的通用 UI 文案（关闭 / 撤销 / 附件等按钮与提示）。
+  common: {
+    close: '关闭',
+    undo: '撤销',
+    expand: '展开',
+    remove: '移除',
+    attachImage: '附加图片',
+    autoRotate: '自动旋转',
+    screenshot: '截图',
+    chatPlaceholder: '向 Meshforge 提问…',
+    undoLabel: '撤销',
+    actionsPerformed: '已执行 {count} 个动作',
+    actionsPerformedPlural: '已执行 {count} 个动作'
+  },
   nav: {
     generate: '生成',
     workflows: '工作流',
@@ -56,6 +70,7 @@ export const zh: typeof en = {
       storage: '存储',
       integrations: '集成',
       performance: '性能',
+      modeldl: '模型下载',
       agent: '智能体',
       logs: '日志',
       about: '关于'
@@ -229,6 +244,30 @@ export const zh: typeof en = {
       copied: '已复制！',
       copyAll: '复制全部',
       empty: '{file}.log 中没有条目'
+    },
+    modeldl: {
+      title: '模型下载',
+      subtitle: '按需下载各推理服务的权重（经 ModelScope CLI 拉取）。列表顶部会对比检查本机 modelscope 是否可用。',
+      mscopeOk: 'ModelScope CLI 可用（{version}）',
+      mscopeOkGeneric: 'ModelScope CLI 可用',
+      mscopeMissing: '未检测到 ModelScope CLI：请先执行 pip install modelscope（打包版已内置）。',
+      installed: '已安装',
+      notInstalled: '未安装',
+      size: '占用',
+      download: '下载',
+      downloadUnavailable: '暂无可下载仓库',
+      downloading: '下载中…',
+      done: '下载完成',
+      desc: {
+        'hunyuan3d-2': '腾讯混元 3D 2 标准版——完整图生 3D 权重，质量高于 mini，显存占用也更大。',
+        'hunyuan3d-2-mini': '腾讯混元 3D 2 mini——轻量图生 3D 权重，消费级显卡可跑。',
+        'hunyuan3d-2mv': '腾讯混元 3D 2 MV——多视角输入版本，用多张视图重建高保真网格。',
+        instantmesh: 'InstantMesh——稀疏视图重建大模型，单图快速出网格。',
+        'stable-zero123': 'Stable Zero123——单图新视角合成，为多视图重建提供输入。',
+        mvdream: 'MVDream——文/图生多视角扩散模型（ModelScope 无单一仓库，参考 HF）。',
+        'wonder3d-plus': 'Wonder3D Plus——跨域扩散生成多视角法线与彩色图（参考 HF）。',
+        imageopt: '图像处理工具包——抠图 / 超分 / 背景移除等预处理权重。'
+      }
     },
     about: {
       title: '关于',
@@ -493,6 +532,7 @@ export const zh: typeof en = {
     uninstallAria: '卸载 {name}',
     uninstallTitle: '卸载“{name}”？',
     uninstallDesc: '扩展文件夹将从服务器上永久删除。',
+    uninstallDescBuiltin: '内置扩展随程序一起发布，磁盘上没有可删除的文件夹。卸载只会把它从工作流中停用，随时可以恢复。',
     downloading: '正在下载… {pct}%',
     extracting: '正在解压…',
     validating: '正在校验…',
@@ -527,8 +567,17 @@ export const zh: typeof en = {
     logDownloaded: '已下载模型权重：{name}',
     logDownloadError: '模型下载出错：{err}',
     logUninstall: '卸载扩展：{msg}',
+    logDisabled: '停用内置扩展：{msg}',
+    logRestore: '恢复扩展：{msg}',
+    disabledTitle: '已停用的内置扩展（{n}）',
+    disabledHint: '这些扩展随程序发布，卸载只是把它们从工作流中隐藏。',
+    restore: '恢复',
+    restoreAll: '全部恢复',
+    restoreTitle: '恢复 {name}',
     toast: {
       uninstalled: '已卸载扩展',
+      disabled: '已停用内置扩展，可随时在本页恢复',
+      restored: '已恢复扩展',
       downloaded: '已下载模型权重：{name}',
       downloadFail: '模型下载失败'
     }
@@ -635,6 +684,7 @@ export const zh: typeof en = {
       foldToFunction: '折叠为函数（子图）',
       expandFunction: '展开函数',
       nodeToggleBreakpoint: '切换断点',
+      paneAddNode: '添加节点',
       pinMenuTitle: '引脚连线',
       pinDeleteEdge: '删除这条连线',
       pinDeleteAll: '删除该引脚的全部连线',
@@ -666,12 +716,18 @@ export const zh: typeof en = {
     },
     help: {
       title: '工作流指南',
-      openPanel: '打开节点面板（搜索 / 回车添加）',
+      openPanel: '在画布空白处双击，打开节点面板（搜索 / 回车添加）',
+      pan: '按住空格拖动平移画布；中键拖动也可平移',
       undoRedo: '撤销 / 重做',
       newWorkflow: '新建工作流',
       closeTab: '关闭当前标签页',
       switchTab: '切换标签页',
       deleteNode: '删除选中的节点或连线',
+      interruptEdge: 'Alt + 左键点击连线，直接打断该连线',
+      frameSelection: '聚焦所选节点（没有选中时聚焦整张图）',
+      commentGroup: '把选中的多个节点收进一个注释框',
+      altReconnect: '按住 Alt 拖动连线到已占用的输入口，新线替代旧线',
+      pinAdd: '悬停节点，点引脚旁的「+」快速插入节点并自动连线',
       drag: '从右侧面板拖拽到画布；移动节点会生成撤销记录',
       connect: '从节点的右侧端口拖到另一节点的左侧端口；颜色表示数据类型',
       waitNode: '运行在此暂停；点击节点上的"继续"以恢复',
@@ -683,13 +739,49 @@ export const zh: typeof en = {
       duplicated: '已复制工作流',
       saveFail: '保存失败，改动可能未保存',
       foldBlocked: '无法折叠：仅支持数据节点',
+      foldBlockedDetail:
+        '仅支持折叠顶层数据节点（排除容器/注释框及其内部节点、流程控制与函数挂点）',
       foldDone: '已折叠为函数',
-      unfoldDone: '已展开函数'
+      unfoldDone: '已展开函数',
+      pinAdded: '已添加挂点'
+    },
+    // 运行期日志 / 预检问题。这些字符串出现在运行日志面板与节点错误里，
+    // 全部经 getT() 取词，避免英文界面漏出中文。
+    runLog: {
+      noImageSelected: '{label}: 未选择图片',
+      noCurrentMesh: '{label}: 3D 查看器中没有当前模型',
+      noMeshFileSelected: '{label}: 未选择网格文件',
+      noGeneratorSelected: '{label}: 未选择生成器',
+      needsImageUpstream: '{label}: 需要上游图片连接',
+      needsUpstreamImage: '{label}: 需要上游图片连接',
+      needsUpstreamMesh: '{label}: 需要上游网格连接',
+      unknownExtension: '{label}: 未知扩展',
+      missingInput: '{label}: 缺少输入连接',
+      varNameNotSet: '预检: {label}: 未设置变量名',
+      varUndeclared: '预检: {label}: 变量『{name}』没有任何 Set 节点声明',
+      eventNameNotSet: '预检: {label}: 未设置事件名',
+      mvNeedsUpstream: '{label}: MV 需要上游为 多视角图片节点 或 数组节点',
+      selectNoInput: '{label}: Select 没有可用输入，本次无输出',
+      varWriteSkipped: '{label}: 未设置变量名，本次写入被忽略',
+      eventBindSkipped: '{label}: 未设置事件名，绑定被忽略',
+      eventCalled: '{label}: 调用事件 \'{name}\'（已绑定 {count} 处）',
+      emptySubgraph: '{label}: 子图为空',
+      depthExceeded: '子图嵌套超过 {depth} 层，已停止下钻',
+      paused: '{label}: 已暂停 — 单步 / 继续',
+      pausedContinue: '{label}: 已暂停 — 继续 或 重试',
+      noBindings: '{label}: 事件 \'{name}\' 没有任何 Bind 绑定'
     },
     nodes: {
       importing: '导入中…',
       noFileSelected: '未选择文件',
       selectImage: '选择图片',
+      replaceImage: '更换图片',
+      clearImage: '清除图片',
+      pinOnlyHintNumber: '默认 {value} · 可由引脚传入数值变量',
+      pinOnlyHintText: '默认 {value} · 可由引脚传入文本变量',
+      pinOnlyHintImage: '从左侧引脚接入一张图片',
+      collapseNode: '折叠节点',
+      expandNode: '展开节点',
       addImage: '添加图片',
       remove: '移除',
       selectMeshFile: '选择网格文件',

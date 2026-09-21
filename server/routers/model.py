@@ -28,8 +28,7 @@ import threading
 from pathlib import Path, PureWindowsPath
 import time
 from http import HTTPStatus
-from pathlib import Path
-from typing import Optional
+from typing import AsyncIterator, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -240,6 +239,103 @@ def _response_total_bytes(headers, already_downloaded: int) -> Optional[int]:
         return None
 
 
+def _download_progress_event(
+    *,
+    base_percent: int,
+    filename: str,
+    file_index: int,
+    total_files: int,
+    status: str,
+    bytes_downloaded: int,
+    total_bytes: Optional[int] = None,
+) -> dict:
+    """构造一条下载进度事件。
+
+    该 dict 的形状在文件开始 / 节流刷进度 / 重试三处完全一致，
+    集中构造可避免字段漂移（阶段一抽取，行为零变更）。
+    """
+    event = {
+        'percent': base_percent,
+        'file': filename,
+        'fileIndex': file_index,
+        'totalFiles': total_files,
+        'status': status,
+        'bytesDownloaded': bytes_downloaded,
+        'stalledSeconds': 0,
+    }
+    if total_bytes is not None:
+        event['totalBytes'] = total_bytes
+    return event
+
+
+def _copy_response_to_temp(
+    *,
+    response,
+    temp_path: Path,
+    mode: str,
+    chunk_size: int,
+    bytes_downloaded: int,
+    filename: str,
+    base_percent: int,
+    file_index: int,
+    total_files: int,
+    total_bytes: Optional[int],
+    attempt: int,
+    retries: int,
+    resumed: bool,
+    progress_cb,
+    control: dict[str, threading.Event],
+) -> int:
+    """把 HTTP 响应体分块写入 `.part` 临时文件，并按节流频率上报进度。
+
+    从 `_download_file_streamed` 的主循环里提取（行为零变更）。
+
+    Args:
+        response: 已打开的 urlopen 响应。
+        temp_path: 目标 `.part` 文件路径。
+        mode: 打开模式（续传 'ab' / 全新 'wb'）。
+        chunk_size: 每次读取的字节数。
+        bytes_downloaded: 进入本函数时已落盘的字节数（续传场景非 0）。
+        filename / base_percent / file_index / total_files: 进度事件字段来源。
+        total_bytes: 响应声明的总字节数（未知为 None）。
+        attempt / retries / resumed: 用于生成状态文案。
+        progress_cb: 进度回调。
+        control: 暂停/取消控制 Event。
+
+    Returns:
+        写入完成后的总字节数。
+    """
+    last_emit = 0.0
+    with temp_path.open(mode) as out:
+        while True:
+            _check_download_control(control)
+            try:
+                chunk = response.read(chunk_size)
+            except socket.timeout as exc:
+                raise TimeoutError(f'Timed out while downloading {filename}') from exc
+            if not chunk:
+                break
+            out.write(chunk)
+            bytes_downloaded += len(chunk)
+
+            # 节流：1MB 分块下若不节流会每秒产生上百个 SSE 事件。
+            now = time.monotonic()
+            if now - last_emit >= PROGRESS_EMIT_INTERVAL_S:
+                progress_cb(
+                    _download_progress_event(
+                        base_percent=base_percent,
+                        filename=filename,
+                        file_index=file_index,
+                        total_files=total_files,
+                        status=_download_status(bytes_downloaded, total_bytes, attempt, retries, resumed=resumed),
+                        bytes_downloaded=bytes_downloaded,
+                        total_bytes=total_bytes,
+                    )
+                )
+                last_emit = now
+    return bytes_downloaded
+
+
 def _download_file_streamed(
     *,
     url: str,
@@ -313,48 +409,39 @@ def _download_file_streamed(
 
                 total_bytes = _response_total_bytes(response.headers, existing_bytes if resumed else 0)
                 bytes_downloaded = existing_bytes
-                last_emit = 0.0
                 chunk_size = 1024 * 1024
                 # 续传用追加模式，全新下载用覆盖模式。
                 mode = 'ab' if resumed else 'wb'
 
-                progress_cb({
-                    'percent': base_percent,
-                    'file': filename,
-                    'fileIndex': file_index,
-                    'totalFiles': total_files,
-                    'status': _download_status(bytes_downloaded, total_bytes, attempt, retries, resumed=resumed),
-                    'bytesDownloaded': bytes_downloaded,
-                    'totalBytes': total_bytes,
-                    'stalledSeconds': 0,
-                })
+                progress_cb(
+                    _download_progress_event(
+                        base_percent=base_percent,
+                        filename=filename,
+                        file_index=file_index,
+                        total_files=total_files,
+                        status=_download_status(bytes_downloaded, total_bytes, attempt, retries, resumed=resumed),
+                        bytes_downloaded=bytes_downloaded,
+                        total_bytes=total_bytes,
+                    )
+                )
 
-                with temp_path.open(mode) as out:
-                    while True:
-                        _check_download_control(control)
-                        try:
-                            chunk = response.read(chunk_size)
-                        except socket.timeout as exc:
-                            raise TimeoutError(f'Timed out while downloading {filename}') from exc
-                        if not chunk:
-                            break
-                        out.write(chunk)
-                        bytes_downloaded += len(chunk)
-
-                        # 节流：1MB 分块下若不节流会每秒产生上百个 SSE 事件。
-                        now = time.monotonic()
-                        if now - last_emit >= PROGRESS_EMIT_INTERVAL_S:
-                            progress_cb({
-                                'percent': base_percent,
-                                'file': filename,
-                                'fileIndex': file_index,
-                                'totalFiles': total_files,
-                                'status': _download_status(bytes_downloaded, total_bytes, attempt, retries, resumed=resumed),
-                                'bytesDownloaded': bytes_downloaded,
-                                'totalBytes': total_bytes,
-                                'stalledSeconds': 0,
-                            })
-                            last_emit = now
+                bytes_downloaded = _copy_response_to_temp(
+                    response=response,
+                    temp_path=temp_path,
+                    mode=mode,
+                    chunk_size=chunk_size,
+                    bytes_downloaded=bytes_downloaded,
+                    filename=filename,
+                    base_percent=base_percent,
+                    file_index=file_index,
+                    total_files=total_files,
+                    total_bytes=total_bytes,
+                    attempt=attempt,
+                    retries=retries,
+                    resumed=resumed,
+                    progress_cb=progress_cb,
+                    control=control,
+                )
 
             # 原子替换：此刻起这个文件才算"下载完成"。
             temp_path.replace(final_path)
@@ -364,15 +451,16 @@ def _download_file_streamed(
             last_error = exc
             # 保留已下的字节：下一轮可用 Range 续传，不必从头再来。
             preserved_bytes = temp_path.stat().st_size if temp_path.exists() else 0
-            progress_cb({
-                'percent': base_percent,
-                'file': filename,
-                'fileIndex': file_index,
-                'totalFiles': total_files,
-                'status': f'Retrying after error ({attempt}/{retries})…',
-                'bytesDownloaded': preserved_bytes,
-                'stalledSeconds': 0,
-            })
+            progress_cb(
+                _download_progress_event(
+                    base_percent=base_percent,
+                    filename=filename,
+                    file_index=file_index,
+                    total_files=total_files,
+                    status=f'Retrying after error ({attempt}/{retries})…',
+                    bytes_downloaded=preserved_bytes,
+                )
+            )
             if attempt >= retries:
                 break
             time.sleep(backoff)
@@ -418,6 +506,165 @@ async def cancel_hf_download(body: DownloadControlBody) -> dict:
         return {'cancelled': False, 'message': 'no active download'}
     control['cancel'].set()
     return {'cancelled': True}
+
+
+async def _stream_one_file(
+    *,
+    loop: asyncio.AbstractEventLoop,
+    repo_id: str,
+    filename: str,
+    idx: int,
+    total: int,
+    dest_dir: Path,
+    control: dict[str, threading.Event],
+    hf_token: Optional[str],
+) -> AsyncIterator[dict]:
+    """下载单个文件并边下边产进度事件；返回时该文件已完整落盘。
+
+    从 `hf_download.stream()` 中提取（行为零变更）：原来嵌套在协程内的
+    "建队列 → 线程池下载 → 轮询队列吐事件 → 收尾事件" 这一段，
+    抽成独立的异步生成器，让上层循环只剩「遍历文件 + 拼 SSE」。
+
+    Yields:
+        进度事件 dict（percent / file / status / bytesDownloaded …）。
+    """
+    base_pct = 1 + round(idx / total * DOWNLOAD_PCT_SPAN)
+    yield {
+        'percent': base_pct,
+        'file': filename,
+        'fileIndex': idx + 1,
+        'totalFiles': total,
+        'status': f'Starting {filename}',
+        'bytesDownloaded': 0,
+        'stalledSeconds': 0,
+    }
+
+    # 每个文件一个队列：把工作线程的进度回调桥接到本协程。
+    queue: asyncio.Queue[dict] = asyncio.Queue()
+
+    def _progress(msg: dict) -> None:
+        # 工作线程里不能直接 await，必须走线程安全的调度入口。
+        loop.call_soon_threadsafe(queue.put_nowait, msg)
+
+    url = f'{HF_RESOLVE}/{repo_id}/resolve/main/{filename}'
+    dl_future = loop.run_in_executor(
+        None,
+        lambda: _download_file_streamed(
+            url=url,
+            filename=filename,
+            dest_dir=dest_dir,
+            file_index=idx + 1,
+            total_files=total,
+            base_percent=base_pct,
+            progress_cb=_progress,
+            control=control,
+            token=hf_token,
+        ),
+    )
+
+    # 边下边刷：只要下载还没结束就持续把队列里的进度吐成事件。
+    while not dl_future.done():
+        try:
+            msg = await asyncio.wait_for(queue.get(), timeout=2.0)
+        except asyncio.TimeoutError:
+            # 2s 内没有新进度（例如大文件分块慢）：继续等，不结束流。
+            continue
+        else:
+            yield msg
+
+    final_size = await dl_future
+    _check_download_control(control)
+
+    yield {
+        'percent': 1 + round((idx + 1) / total * DOWNLOAD_PCT_SPAN),
+        'file': filename,
+        'fileIndex': idx + 1,
+        'totalFiles': total,
+        'status': 'Downloaded',
+        'bytesDownloaded': final_size,
+        'stalledSeconds': 0,
+    }
+
+
+async def _hf_download_stream(
+    *,
+    repo_id: str,
+    model_id: str,
+    dest_dir: Path,
+    skip_list: list,
+    include_list: list,
+    hf_token: Optional[str],
+    control: dict[str, threading.Event],
+) -> AsyncIterator[str]:
+    """生成 hf_download 的 SSE 事件序列（已格式化为 data: 行）。
+
+    从 `hf_download` 端点内提取（行为零变更），让端点函数只负责
+    校验、解析参数、装配依赖。
+
+    Yields:
+        已编码好的 SSE 帧字符串。
+    """
+    # 拿到当前事件循环：下载线程靠它把进度安全地投递回协程。
+    loop = asyncio.get_running_loop()
+
+    def _fmt(data: dict) -> str:
+        """把 dict 编码成一条 SSE data 事件。"""
+        return f'data: {json.dumps(data)}\n\n'
+
+    try:
+        yield _fmt({'percent': 0, 'status': 'Listing repository files...'})
+        _check_download_control(control)
+
+        # 阻塞的网络调用放到线程池，避免卡住事件循环。
+        files = await loop.run_in_executor(
+            None,
+            lambda: [
+                f for f in _list_repo_files(repo_id, hf_token)
+                # 有 include 列表时只保留命中前缀的文件。
+                if (not include_list or any(f.startswith(p) for p in include_list))
+                if not any(f.startswith(p) for p in skip_list)
+            ],
+        )
+        total = len(files)
+
+        if total == 0:
+            yield _fmt({'error': f'No files found in HuggingFace repo: {repo_id}'})
+            return
+
+        yield _fmt({'percent': 1, 'status': f'Downloading {total} files...'})
+
+        for i, filename in enumerate(files):
+            _check_download_control(control)
+            async for event in _stream_one_file(
+                loop=loop,
+                repo_id=repo_id,
+                filename=filename,
+                idx=i,
+                total=total,
+                dest_dir=dest_dir,
+                control=control,
+                hf_token=hf_token,
+            ):
+                yield _fmt(event)
+
+        yield _fmt({'percent': 100, 'status': 'done'})
+
+    except DownloadPaused:
+        yield _fmt({'paused': True, 'status': 'paused'})
+    except DownloadCancelled:
+        # 只删半成品（.part）文件；已完成的文件保留，
+        # 下次下载可从中断处续传。
+        for part in dest_dir.rglob('*.part'):
+            part.unlink(missing_ok=True)
+        yield _fmt({'cancelled': True, 'status': 'cancelled'})
+    except Exception as exc:  # noqa: BLE001 - SSE streams surface errors as events
+        # SSE 已开流后无法再改 HTTP 状态码，只能把错误作为事件发出去。
+        yield _fmt({'error': str(exc)})
+    finally:
+        # 仅当控制项仍属于本次会话时才移除。
+        # 同一 model_id 可能已被新会话接管控制项，故先比对身份再删。
+        if _download_controls.get(model_id) is control:
+            _download_controls.pop(model_id, None)
 
 
 # ─── SSE 下载流 ──────────────────────────────────────────────────────────────
@@ -467,123 +714,23 @@ async def hf_download(
                 return []
         return fallback
 
-    skip_list = _list(skip_prefixes, registry.get_manifest(model_id).get('hf_skip_prefixes') or [])
-    include_list = _list(include_prefixes, registry.get_manifest(model_id).get('hf_include_prefixes') or [])
+    skip_list = _list(skip_prefixes, manifest.get('hf_skip_prefixes') or [])
+    include_list = _list(include_prefixes, manifest.get('hf_include_prefixes') or [])
 
     # token 来源：X-HF-Token 请求头 → 两个常见的 HF token 环境变量名。
     # isinstance 守卫：直接函数调用（单测）拿到的默认值是 Header 实例而非字符串。
     header_token = x_hf_token.strip() if isinstance(x_hf_token, str) else ''
     hf_token = header_token or os.environ.get('HUGGING_FACE_HUB_TOKEN') or os.environ.get('HF_TOKEN') or None
-    control = _new_download_control(model_id)
 
-    async def stream():
-        """生成 SSE 事件序列；下载在线程池里跑，事件经队列回灌到事件循环。"""
-        # 拿到当前事件循环：下载线程靠它把进度安全地投递回协程。
-        loop = asyncio.get_running_loop()
-
-        def _fmt(data: dict) -> str:
-            """把 dict 编码成一条 SSE data 事件。"""
-            return f'data: {json.dumps(data)}\n\n'
-
-        try:
-            yield _fmt({'percent': 0, 'status': 'Listing repository files...'})
-            _check_download_control(control)
-
-            # 阻塞的网络调用放到线程池，避免卡住事件循环。
-            files = await loop.run_in_executor(
-                None,
-                lambda: [
-                    f for f in _list_repo_files(repo_id, hf_token)
-                    # 有 include 列表时只保留命中前缀的文件。
-                    if (not include_list or any(f.startswith(p) for p in include_list))
-                    if not any(f.startswith(p) for p in skip_list)
-                ],
-            )
-            total = len(files)
-
-            if total == 0:
-                yield _fmt({'error': f'No files found in HuggingFace repo: {repo_id}'})
-                return
-
-            yield _fmt({'percent': 1, 'status': f'Downloading {total} files...'})
-
-            for i, filename in enumerate(files):
-                _check_download_control(control)
-                base_pct = 1 + round(i / total * DOWNLOAD_PCT_SPAN)
-                yield _fmt({
-                    'percent': base_pct,
-                    'file': filename,
-                    'fileIndex': i + 1,
-                    'totalFiles': total,
-                    'status': f'Starting {filename}',
-                    'bytesDownloaded': 0,
-                    'stalledSeconds': 0,
-                })
-
-                # 每个文件一个队列：把工作线程的进度回调桥接到本协程。
-                queue: asyncio.Queue[dict] = asyncio.Queue()
-
-                def _progress(msg: dict) -> None:
-                    # 工作线程里不能直接 await，必须走线程安全的调度入口。
-                    loop.call_soon_threadsafe(queue.put_nowait, msg)
-
-                url = f'{HF_RESOLVE}/{repo_id}/resolve/main/{filename}'
-                dl_future = loop.run_in_executor(
-                    None,
-                    lambda: _download_file_streamed(
-                        url=url,
-                        filename=filename,
-                        dest_dir=dest_dir,
-                        file_index=i + 1,
-                        total_files=total,
-                        base_percent=base_pct,
-                        progress_cb=_progress,
-                        control=control,
-                        token=hf_token,
-                    ),
-                )
-
-                # 边下边刷：只要下载还没结束就持续把队列里的进度吐成 SSE。
-                while not dl_future.done():
-                    try:
-                        msg = await asyncio.wait_for(queue.get(), timeout=2.0)
-                    except asyncio.TimeoutError:
-                        # 2s 内没有新进度（例如大文件分块慢）：继续等，不结束流。
-                        continue
-                    else:
-                        yield _fmt(msg)
-
-                final_size = await dl_future
-                _check_download_control(control)
-
-                pct = 1 + round((i + 1) / total * DOWNLOAD_PCT_SPAN)
-                yield _fmt({
-                    'percent': pct,
-                    'file': filename,
-                    'fileIndex': i + 1,
-                    'totalFiles': total,
-                    'status': 'Downloaded',
-                    'bytesDownloaded': final_size,
-                    'stalledSeconds': 0,
-                })
-
-            yield _fmt({'percent': 100, 'status': 'done'})
-
-        except DownloadPaused:
-            yield _fmt({'paused': True, 'status': 'paused'})
-        except DownloadCancelled:
-            # 只删半成品（.part）文件；已完成的文件保留，
-            # 下次下载可从中断处续传。
-            for part in dest_dir.rglob('*.part'):
-                part.unlink(missing_ok=True)
-            yield _fmt({'cancelled': True, 'status': 'cancelled'})
-        except Exception as exc:  # noqa: BLE001 - SSE streams surface errors as events
-            # SSE 已开流后无法再改 HTTP 状态码，只能把错误作为事件发出去。
-            yield _fmt({'error': str(exc)})
-        finally:
-            # 仅当控制项仍属于本次会话时才移除。
-            # 同一 model_id 可能已被新会话接管控制项，故先比对身份再删。
-            if _download_controls.get(model_id) is control:
-                _download_controls.pop(model_id, None)
-
-    return StreamingResponse(stream(), media_type='text/event-stream')
+    return StreamingResponse(
+        _hf_download_stream(
+            repo_id=repo_id,
+            model_id=model_id,
+            dest_dir=dest_dir,
+            skip_list=skip_list,
+            include_list=include_list,
+            hf_token=hf_token,
+            control=_new_download_control(model_id),
+        ),
+        media_type='text/event-stream',
+    )

@@ -311,8 +311,8 @@
   padding: 1px 6px;
   font-size: 9px;
   font-weight: 600;
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: var(--sky);
+  border: 1px solid color-mix(in srgb, var(--sky) 35%, transparent);
   border-radius: var(--radius-sm);
 }
 

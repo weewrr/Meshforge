@@ -22,9 +22,7 @@
 depth-anything-v2 官方包）无法在 setup 里保证一次装全，因此**遇缺依赖返回明确的中文
 错误提示**，不崩溃；轻依赖模型（ESRGAN/RRDBNet 纯 torch、M-LSD tflite）在本文件内
 直接实现推理。所有模型按 tool 惰性加载，仅当真正被调用时才占用显存。
-
-6GB 显存提示：本服务默认 fp32；6GB 卡建议在调用时给深度/超分类模型传 low_vram=1，
-用半精度/更低分辨率（见 README 部署章节的显存说明）。
+缺依赖时的中文指引是本文件给出的（最精确），节点上不再重复放显卡/显存提示文字。
 
 用法：由后端按需拉起（本文件是 HTTP 服务，不是命令行入口）
 CLI：python imageopt_service.py --model-root D:\\github\\models --model ImageOptimization --port 8783

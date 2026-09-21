@@ -1,9 +1,10 @@
 /**
  * Python 后端进程桥接。
  *
- * 探测 server/.venv 里的解释器 → 以子进程拉起 uvicorn → 轮询 /health 直到
- * 端口就绪 → 崩溃后自动重启；应用退出时逆序优雅关闭。前后端解耦的关键就在
- * 这里：渲染进程只认 127.0.0.1:8766，不关心后端进程是谁拉起的。
+ * 探测 Python 解释器（随包运行时 .runtime → 开发机 .venv → 系统 python）→
+ * 以子进程拉起 uvicorn → 轮询 /health 直到端口就绪 → 崩溃后自动重启；
+ * 应用退出时逆序优雅关闭。前后端解耦的关键就在这里：渲染进程只认
+ * 127.0.0.1:8766，不关心后端进程是谁拉起的。
  *
  * 打包兼容（优化文档 3.1 / 12.1 / 13.1）：
  * - 后端目录区分开发态与打包态：开发态在 app.getAppPath()/server，
@@ -87,9 +88,14 @@ function dataDir(): string {
   return serverDir()
 }
 
-// 探测 Python 可执行文件：优先用 server/.venv 里的虚拟环境解释器，
-// 找不到再回退到系统 PATH 中的 `python`（开发期常用）。
+// 探测 Python 可执行文件，按"离用户最近、依赖最全"排序：
+//   1. server/.runtime/python —— 随包分发的自包含运行时（打包态首选，
+//      由 scripts/prepare_bundled_python.py 生成，含 fastapi/uvicorn/modelscope）；
+//   2. server/.venv —— 开发机的虚拟环境；
+//   3. 系统 PATH 上的 python —— 兜底，依赖需用户自备。
 function pythonExecutable(): string {
+  const bundled = path.join(serverDir(), '.runtime', 'python', 'python.exe')
+  if (existsSync(bundled)) return bundled
   const venvPython = path.join(serverDir(), '.venv', 'Scripts', 'python.exe')
   if (existsSync(venvPython)) return venvPython
   return 'python'
@@ -178,8 +184,8 @@ export async function startPythonBackend(): Promise<void> {
   }
   if (exe === 'python') {
     console.warn(
-      '[meshforge-api] 未找到内置 .venv 解释器，回退到系统 python。' +
-        '需保证系统 Python 已安装 fastapi/uvicorn 等依赖，否则后端无法启动。'
+      '[meshforge-api] 未找到随包运行时（server/.runtime）或 .venv，回退到系统 python。' +
+        '需保证系统 Python 已安装 fastapi/uvicorn/modelscope 等依赖，否则后端与模型下载都不可用。'
     )
   }
 

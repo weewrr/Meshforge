@@ -25,6 +25,7 @@ import {
   type WFNode
 } from '../../types'
 import { useSceneStore } from '../scene'
+import { getT } from '../../i18n'
 import type { EngineCtx } from './engine-context'
 import { Cancelled, isVoidOutput, mvViewsFrom, nodeExtensionId, resolveParamPins, textInputs, topoSort, truthy, urlToFile } from './helpers'
 import { readOutput, rt, storeOutput } from './runtime'
@@ -125,18 +126,19 @@ export async function execNode(ctx: EngineCtx, node: WFNode, edges: WFEdge[], de
       const generatorId = String(params.generatorId ?? '')
       if (!generatorId) throw new Error(`${label}: no generator selected`)
       const upstream = findUpstream(node.id, edges)
-      if (!upstream) throw new Error(`${label}: needs an upstream image`)
       // 多视角（MV）生成器的输入形状与普通单图不同，需单独组装 views。
       const isMV = generatorId === HUNYUAN_MV_GENERATOR
       let image: File
       let views: Partial<Record<MvViewTag, File>> = {}
       if (isMV) {
-        const mv = mvViewsFrom(node, upstream)
-        if (!mv) throw new Error(`${label}: MV 需要上游为 多视角图片节点 或 数组节点`)
+        // 只接了视角引脚、没接主输入时 upstream 为空——交给 mvViewsFrom 给出
+        // "四视图凑不齐"这个更准确的原因，而不是笼统的"缺上游图片"。
+        const mv = mvViewsFrom(node, upstream, edges)
+        if (!mv) throw new Error(getT('workflows.runLog.mvNeedsUpstream', { label }))
         image = mv.front
         views = mv.views
       } else {
-        if (upstream.type !== 'image' || !upstream.file) throw new Error(`${label}: needs an upstream image`)
+        if (upstream?.type !== 'image' || !upstream.file) throw new Error(`${label}: needs an upstream image`)
         image = upstream.file
       }
       logger.info(`${label}: submitting to '${generatorId}'`)
@@ -176,18 +178,18 @@ export async function execNode(ctx: EngineCtx, node: WFNode, edges: WFEdge[], de
       }
       // 模型生成器（image → mesh），管线与 generatorNode 完全一致。
       const upstream = findUpstream(node.id, edges)
-      if (!upstream) throw new Error(`${label}: needs an upstream image`)
       logger.info(`${label}: submitting to '${ext.id}'`)
       const isMV = ext.id === HUNYUAN_MV_GENERATOR
       let image: File
       let views: Partial<Record<MvViewTag, File>> = {}
       if (isMV) {
-        const mv = mvViewsFrom(node, upstream)
-        if (!mv) throw new Error(`${label}: MV 需要上游为 多视角图片节点 或 数组节点`)
+        // 见 generatorNode 分支：MV 允许只接视角引脚。
+        const mv = mvViewsFrom(node, upstream, edges)
+        if (!mv) throw new Error(getT('workflows.runLog.mvNeedsUpstream', { label }))
         image = mv.front
         views = mv.views
       } else {
-        if (upstream.type !== 'image' || !upstream.file) throw new Error(`${label}: needs an upstream image`)
+        if (upstream?.type !== 'image' || !upstream.file) throw new Error(`${label}: needs an upstream image`)
         image = upstream.file
       }
       const { job_id } = await submitImage(image, ext.id, extParams, views)
@@ -254,7 +256,7 @@ export async function execNode(ctx: EngineCtx, node: WFNode, edges: WFEdge[], de
         chosen = incoming.find((x) => x.idx === idx)?.out
       }
       if (chosen) rt.outputs.set(node.id, chosen)
-      else logger.warn(`${label}: Select 没有可用输入，本次无输出`)
+      else logger.warn(getT('workflows.runLog.selectNoInput', { label }))
       break
     }
 
@@ -371,7 +373,7 @@ export async function execNode(ctx: EngineCtx, node: WFNode, edges: WFEdge[], de
       const up = findUpstream(node.id, edges)
       const text = String(up?.text ?? params.default ?? '')
       if (name) rt.vars.set(name, text)
-      else logger.warn(`${label}: 未设置变量名，本次写入被忽略`)
+      else logger.warn(getT('workflows.runLog.varWriteSkipped', { label }))
       rt.outputs.set(node.id, { type: 'text', text })
       break
     }
@@ -381,7 +383,7 @@ export async function execNode(ctx: EngineCtx, node: WFNode, edges: WFEdge[], de
       // 已由 run() 统一登记；这里只在被数据图显式执行时兜底补登记一次。
       const name = String(params[DISPATCHER_PARAM] ?? '').trim()
       if (!name) {
-        logger.warn(`${label}: 未设置事件名，绑定被忽略`)
+        logger.warn(getT('workflows.runLog.eventBindSkipped', { label }))
         break
       }
       const list = rt.boundDispatchers.get(name) ?? []
@@ -395,8 +397,8 @@ export async function execNode(ctx: EngineCtx, node: WFNode, edges: WFEdge[], de
       // 这里只做日志与告警，本身不产生输出。
       const name = String(params[DISPATCHER_PARAM] ?? '').trim()
       const n = name ? (rt.boundDispatchers.get(name)?.length ?? 0) : 0
-      if (!name) logger.warn(`${label}: 未设置事件名`)
-      else logger.info(`${label}: 调用事件 '${name}'（已绑定 ${n} 处）`)
+      if (!name) logger.warn(getT('workflows.runLog.eventNameNotSet', { label }))
+      else logger.info(getT('workflows.runLog.eventCalled', { label, name, count: n }))
       break
     }
 
@@ -440,10 +442,13 @@ export async function execNode(ctx: EngineCtx, node: WFNode, edges: WFEdge[], de
     case 'clampNode': {
       // 钳制：value 落在 [min, max] 区间内（输入不足时按 0/1 兜底）。
       // 上下界传入顺序不保证大小，因此先做 min/max 归一。
+      // 注意用 Number.isFinite 而非 Number.isNaN：textInputs 返回的是稀疏数组，
+      // 未接线的引脚解构出来是 undefined，而 Number.isNaN(undefined) === false，
+      // 会让"输入不足"的兜底失效、把结果算成 NaN。
       const [v, lo, hi] = textInputs(node.id, edges).map((s) => Number(s))
-      const value = Number.isNaN(v) ? 0 : v
-      const a = Number.isNaN(lo) ? 0 : lo
-      const b = Number.isNaN(hi) ? 1 : hi
+      const value = Number.isFinite(v) ? v : 0
+      const a = Number.isFinite(lo) ? lo : 0
+      const b = Number.isFinite(hi) ? hi : 1
       const min = Math.min(a, b)
       const max = Math.max(a, b)
       rt.outputs.set(node.id, { type: 'text', text: String(Math.min(Math.max(value, min), max)) })
@@ -453,9 +458,10 @@ export async function execNode(ctx: EngineCtx, node: WFNode, edges: WFEdge[], de
     case 'lerpNode': {
       // 线性插值：A + (B - A) * Alpha。Alpha 会被夹到 [0,1]，避免外插。
       const [a, b, t] = textInputs(node.id, edges).map((s) => Number(s))
-      const from = Number.isNaN(a) ? 0 : a
-      const to = Number.isNaN(b) ? 1 : b
-      const alpha = Number.isNaN(t) ? 0 : Math.min(Math.max(t, 0), 1)
+      // 同 clampNode：未接线引脚是 undefined，必须用 isFinite 判定"缺失"。
+      const from = Number.isFinite(a) ? a : 0
+      const to = Number.isFinite(b) ? b : 1
+      const alpha = Number.isFinite(t) ? Math.min(Math.max(t, 0), 1) : 0
       rt.outputs.set(node.id, { type: 'text', text: String(from + (to - from) * alpha) })
       break
     }
@@ -464,8 +470,9 @@ export async function execNode(ctx: EngineCtx, node: WFNode, edges: WFEdge[], de
       // 随机数：在 [min, max] 内取一个值（缺省 0..1）。
       // 结果截到 3 位小数：避免浮点尾巴污染下游文本比较/拼接。
       const [lo, hi] = textInputs(node.id, edges).map((s) => Number(s))
-      const a = Number.isNaN(lo) ? 0 : lo
-      const b = Number.isNaN(hi) ? 1 : hi
+      // 同 clampNode：未接线时兜底为 0..1，而不是产出 'NaN' 文本。
+      const a = Number.isFinite(lo) ? lo : 0
+      const b = Number.isFinite(hi) ? hi : 1
       const min = Math.min(a, b)
       const max = Math.max(a, b)
       const value = min + Math.random() * (max - min)
@@ -480,7 +487,7 @@ export async function execNode(ctx: EngineCtx, node: WFNode, edges: WFEdge[], de
       // 否则保持纯数据 DAG 拓扑执行。
       const doc = getSubgraphDoc({ data: { params: params as Record<string, unknown> } })
       if (!doc || doc.nodes.length === 0) {
-        logger.warn(`${label}: 子图为空`)
+        logger.warn(getT('workflows.runLog.emptySubgraph', { label }))
         break
       }
       // 1) 入参注入：把 `in0/in1/...` 引脚上的值写到子图内对应的输入挂点 refId 上。
@@ -495,7 +502,7 @@ export async function execNode(ctx: EngineCtx, node: WFNode, edges: WFEdge[], de
       }
       // 递归保护：图论上允许自嵌套，超过深度上限直接停止下钻，防止栈溢出/死循环。
       if (depth >= MAX_GRAPH_DEPTH) {
-        logger.warn(`${label}: 子图嵌套超过 ${MAX_GRAPH_DEPTH} 层，已停止下钻`)
+        logger.warn(getT('workflows.runLog.depthExceeded', { depth: MAX_GRAPH_DEPTH }))
         break
       }
       // 2) 内联执行函数体：优先走 run() 注入的 innerGraphRunner（支持 exec 语义）。

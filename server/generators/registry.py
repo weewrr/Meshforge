@@ -5,6 +5,10 @@ P1: manual registration. Extensions installed into server/extensions/<id>/
   * manifest.json — 清单：{id, display_name, kind, input, output, params}
   * generator.py  — model 类：定义 build_generator()，返回 BaseGenerator
   * processor.py  — process 类：定义 process_tool(mesh_path, out_dir, params, progress, cancel) -> Path
+
+内置生成器（本文件模块末尾那批 `registry.register(...)`）是代码注册的，磁盘上
+没有目录可删；用户"卸载"它们等于**停用**，id 落在 `disabled-extensions.json`
+（见 `extension_state.py`），`register()` 装载时跳过，因此停用能扛住重启。
 """
 
 import importlib.util
@@ -13,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from config import EXTENSIONS_DIR, MODELS_DIR, SERVICES_ROOT  # 集中配置：开发态在 server/ 下，打包态在用户数据目录
+from extension_state import is_disabled
 from .base import BaseGenerator
 from .hunyuan import Hunyuan3DGenerator
 from .hunyuan_full import Hunyuan3DFullGenerator
@@ -30,13 +35,54 @@ class GeneratorRegistry:
     """
 
     def __init__(self) -> None:
+        # 全部**代码注册**的内置生成器，含已被用户停用的：停用只是从
+        # `_generators` 摘掉，实例仍留在这里，所以"恢复"不需要重启、也不用重跑
+        # 构造代码（那批构造代码在模块顶层，已经跑过一次了）。
+        self._all_generators: dict[str, BaseGenerator] = {}
+        # 当前**可用**的生成器（内置 - 已停用 + 磁盘清单扫描到的）。
         self._generators: dict[str, BaseGenerator] = {}
         self._process_tools: dict[str, dict] = {}
         self._errors: dict[str, str] = {}
         self._manifests: dict[str, dict] = {}
 
     def register(self, generator: BaseGenerator) -> None:
+        """登记一个**内置**生成器（清单扩展走 `scan_extensions()`，不经这里）。
+
+        已停用（`disabled-extensions.json` 里记着）的 id 只进 `_all_generators`、
+        不进行 `_generators`——这就是"卸载内置扩展能扛住重启"的实现点：模块重新
+        导入时会再跑一遍 `register(...)`，但停用状态拦住了它。
+        """
+        self._all_generators[generator.id] = generator
+        if is_disabled(generator.id):
+            return
         self._generators[generator.id] = generator
+
+    def builtin_ids(self) -> set[str]:
+        """全部**代码内置**的生成器 id（含已停用的）。
+
+        与 `_generators` 的区别：后者混入了 `scan_extensions()` 从磁盘装进来的
+        清单扩展，那些是可以真删目录的，不属于"只能停用"的范畴。
+        """
+        return set(self._all_generators)
+
+    def is_builtin(self, ext_id: str) -> bool:
+        """该 id 是否由代码注册（`/extensions` 据此标 `builtin` 字段）。"""
+        return ext_id in self._all_generators
+
+    def restore(self, ext_id: str) -> bool:
+        """把某个被停用的内置生成器放回可用集合。
+
+        Args:
+            ext_id: 扩展 id。
+
+        Returns:
+            是否真的恢复了（非内置、或本来就可用 → False）。
+        """
+        generator = self._all_generators.get(ext_id)
+        if generator is None:
+            return False
+        self._generators[ext_id] = generator
+        return True
 
     def get(self, generator_id: str) -> Optional[BaseGenerator]:
         return self._generators.get(generator_id)
@@ -52,6 +98,8 @@ class GeneratorRegistry:
                 'output': g.output_type,
                 'category': g.category,
                 'params': g.params,
+                # 代码内置 = 磁盘无目录、卸载只能停用（可恢复）。
+                'builtin': self.is_builtin(g.id),
             }
             for g in self._generators.values()
         ]
@@ -79,7 +127,6 @@ class GeneratorRegistry:
             加载失败的扩展 id 列表（失败原因按 id 存于 `self._errors`）。
         """
         errors: dict[str, str] = {}
-        loaded_ids: set[str] = set()
 
         if not EXTENSIONS_DIR.is_dir():
             self._errors = {}
@@ -115,7 +162,6 @@ class GeneratorRegistry:
                         'params': manifest.get('params') or [],
                         'fn': module.process_tool,
                     }
-                    loaded_ids.add(ext_id)
                 else:
                     module = self._load_generator_module(ext_dir, 'generator.py')
                     if module is None or not hasattr(module, 'build_generator'):
@@ -129,20 +175,25 @@ class GeneratorRegistry:
                     if manifest.get('params') is not None:
                         generator.params = manifest.get('params')
                     self._generators[ext_id] = generator
-                    loaded_ids.add(ext_id)
             except Exception as exc:  # noqa: BLE001 - per-extension isolation
                 errors[ext_dir.name] = f'{type(exc).__name__}: {exc}'
 
-        # 丢弃目录已消失的扩展。
-        for ext_id in list(self._generators):
-            if ext_id not in loaded_ids and (EXTENSIONS_DIR / ext_id).exists() is False:
-                pass  # keep manual generators; only prune manifest-loaded ones
-
+        # 这里刻意**不**清理 `_generators`：它同时装着内置生成器（`register()`
+        # 注册，磁盘上没有目录）与清单扩展，无法用"目录是否存在"来区分，
+        # 误删会把内置生成器一起干掉。清单扩展卸载走的是 `unload()` 显式摘除，
+        # 内置生成器的停用走 `disabled-extensions.json`。原先那个只 `pass` 的
+        # 清理循环是死代码，已删。
         self._errors = errors
         return list(errors)
 
     def unload(self, ext_id: str) -> None:
-        """Remove a dynamically-loaded extension (generator or process tool)."""
+        """从**可用**集合里摘掉一个扩展（生成器或处理器工具）。
+
+        只动 `_generators` / `_process_tools` 等"当前生效"的字典；
+        内置生成器的实例仍留在 `_all_generators`，因此 `restore()` 能立刻放回来。
+        真正跨重启生效需要调用方把 id 写进停用记录（见 `extension_state.py`），
+        这一步刻意留在 router 里，registry 只负责读、不负责写盘。
+        """
         self._generators.pop(ext_id, None)
         self._process_tools.pop(ext_id, None)
         self._errors.pop(ext_id, None)
@@ -246,6 +297,12 @@ registry.register(MultiviewGenerator(
 #    全部跑在共享 imageopt_service.py（端口 8783，venv SERVICES_ROOT/imageopt-venv），
 #    靠 ImageOptGenerator 的 tool 字段区分具体模型。权重在
 #    SERVICES_ROOT/models/ImageOptimization/<工具名>/。
+#
+#    这些节点**不放「显存 / 6GB 卡」这类说明文字**：节点上只应出现"改了会有用"的
+#    控件，显卡档位属于 README 部署章节的事，摆在画布节点里是纯噪音。历史上这里
+#    有 4 条 `type: 'label'` 的 vram_note（抠图 / 超分 / 人像修复 / Matting），
+#    已全部删除；缺依赖的情况由 imageopt_service.py 在调用时返回明确中文指引，
+#    比节点上那句泛泛的提示精确得多。
 _IMAGEOOT_AUTOSTART = {
     'python': str(SERVICES_ROOT / 'imageopt-venv' / 'Scripts' / 'python.exe'),
     'marker': str(SERVICES_ROOT / 'models' / 'ImageOptimization' / 'M-LSD-tiny-LiteRT' / 'mlsd_fp16.tflite'),
@@ -259,8 +316,6 @@ _MATTING_PARAMS = [
     {'id': 'format', 'label': '输出', 'type': 'select', 'default': 'rgba',
      'options': [{'value': 'rgba', 'label': '透明背景 PNG'},
                  {'value': 'white', 'label': '白色背景'}]},
-    {'id': 'vram_note', 'label': '显存', 'type': 'label',
-     'default': 'RMBG-2.0/BiRefNet 为全精度 BiRefNet，6GB 卡建议低于 1.5k 输入分辨率'},
 ]
 
 registry.register(ImageOptGenerator(
@@ -281,21 +336,12 @@ registry.register(ImageOptGenerator(
     gen_id='image-esrgan',
     name='Real-ESRGAN 超分 x2',
     tool='esrgan',
-    params=[
-        {'id': 'vram_note', 'label': '显存', 'type': 'label',
-         'default': 'RRDBNet 纯 torch、轻量，6GB 卡可放心用 (默认 fp32)'},
-    ],
     autostart=_IMAGEOOT_AUTOSTART,
 ))
 registry.register(ImageOptGenerator(
     gen_id='image-depth',
     name='Depth-Anything-V2 深度图',
     tool='depth',
-    params=[
-        {'id': 'low_vram', 'label': '低显存模式', 'type': 'select', 'default': '1',
-         'options': [{'value': '1', 'label': '开 (518px, 6GB)'},
-                     {'value': '0', 'label': '关 (518px)'}]},
-    ],
     autostart=_IMAGEOOT_AUTOSTART,
 ))
 registry.register(ImageOptGenerator(
@@ -319,20 +365,12 @@ registry.register(ImageOptGenerator(
     gen_id='image-codeformer',
     name='CodeFormer 人像修复',
     tool='codeformer',
-    params=[
-        {'id': 'vram_note', 'label': '显存', 'type': 'label',
-         'default': '需 basicsr/facexlib 重依赖，setup 未自动装；未实现时后端会返回明确中文提示'},
-    ],
     autostart=_IMAGEOOT_AUTOSTART,
 ))
 registry.register(ImageOptGenerator(
     gen_id='image-matting',
     name='Universal Matting 人像',
     tool='matting',
-    params=[
-        {'id': 'vram_note', 'label': '显存', 'type': 'label',
-         'default': '需 TensorFlow 重依赖，setup 未自动装；未实现时后端会返回明确中文提示'},
-    ],
     autostart=_IMAGEOOT_AUTOSTART,
 ))
 registry.scan_extensions()

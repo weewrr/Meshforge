@@ -113,10 +113,15 @@ class Hunyuan3DFullGenerator(BaseGenerator):
     display_name = 'Hunyuan3D 2 Full (Real)'
     input_type = 'image'
     output_type = 'mesh'
+    # 数字参数一律 pin_only（同 hunyuan.py 的说明）：节点上不摆输入框，改值走引脚；
+    # 下拉框保留控件，因为"选项"本身就是信息。
     params = [
         {'id': 'steps', 'label': '采样步数', 'type': 'int', 'default': 20, 'min': 5, 'max': 100,
+         'pin_only': True,
          'tooltip': '默认 turbo 版建议 8~20；标准版建议 50（需以 HY3DGEN_SUBFOLDER=hunyuan3d-dit-v2-0 启动服务）'},
-        {'id': 'guidance', 'label': '引导强度', 'type': 'float', 'default': 5.0, 'min': 1.0, 'max': 10.0},
+        {'id': 'guidance', 'label': '引导强度', 'type': 'float', 'default': 5.0, 'min': 1.0, 'max': 10.0,
+         'pin_only': True,
+         'tooltip': 'CFG 引导强度：越大越贴合输入图，过高可能过饱和'},
         {'id': 'octree', 'label': '重建分辨率', 'type': 'select', 'default': 256,
          'options': [
              {'value': 256, 'label': '标准 256（省显存）'},
@@ -125,6 +130,7 @@ class Hunyuan3DFullGenerator(BaseGenerator):
          ],
          'tooltip': '体积重建分辨率：越高表面细节越丰富，显存与耗时随之增加'},
         {'id': 'seed', 'label': '随机种子', 'type': 'int', 'default': -1, 'min': -1, 'max': 999_999_999,
+         'pin_only': True,
          'tooltip': '-1 = 每次随机；固定为某个正数可复现同一结果，换种子多试几次挑最佳'},
         {'id': 'remove_base', 'label': '去底部圆盘', 'type': 'select', 'default': 1,
          'options': [

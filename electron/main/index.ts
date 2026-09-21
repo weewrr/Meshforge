@@ -17,13 +17,20 @@ import { clearSecrets, getSecret, setSecret } from './secret-store'
 // （渲染进程无响应、WebGL 上下文丢失）。回退到 SwiftShader 可让应用
 // 在这类机器上保持稳定。
 app.disableHardwareAcceleration()
-// 在本机上 Chromium 沙箱 broker 会破坏子进程启动：GPU 进程以退出码 1
+// 在部分机器上 Chromium 沙箱 broker 会破坏子进程启动：GPU 进程以退出码 1
 // 退出、网络服务失败，且一切导航（连 data: URL 也一样）都以
 // ERR_FAILED (-2) 被拒绝。
-// --no-sandbox is the only reliable workaround here; contextIsolation stays on.
-app.commandLine.appendSwitch('no-sandbox')
+//
+// 这是**机器相关的**环境缺陷，不是应用要求，因此做成可按环境变量关闭：
+//   MESHFORGE_ALLOW_SANDBOX=1  → 保留 Chromium 沙箱（安全默认值优先）
+//   未设置（默认）              → 沿用 --no-sandbox 兼容开关，保证老机器可用
+// 无论哪条路径，contextIsolation + sandbox:true 都保持开启。
+const allowSandbox = process.env.MESHFORGE_ALLOW_SANDBOX === '1'
+if (!allowSandbox) {
+  app.commandLine.appendSwitch('no-sandbox')
+  app.commandLine.appendSwitch('disable-gpu-sandbox')
+}
 app.commandLine.appendSwitch('disable-gpu')
-app.commandLine.appendSwitch('disable-gpu-sandbox')
 
 let mainWindow: BrowserWindow | null = null
 

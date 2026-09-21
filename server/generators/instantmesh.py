@@ -107,11 +107,15 @@ class InstantMeshGenerator(BaseGenerator):
     display_name = 'InstantMesh 大档 (Real)'
     input_type = 'image'
     output_type = 'mesh'
+    # 数字参数一律 pin_only（同 hunyuan.py 的说明）：节点上不摆输入框，改值走引脚；
+    # 下拉框（导出纹理贴图 / 前景抠图）保留控件，因为"选项"本身就是信息。
     params = [
         {'id': 'diffusion_steps', 'label': '扩散采样步数', 'type': 'int', 'default': 30,
          'min': 5, 'max': 100,
+         'pin_only': True,
          'tooltip': 'Zero123++ 多视图采样步数：官方默认 75，增大更细腻但更慢'},
         {'id': 'seed', 'label': '随机种子', 'type': 'int', 'default': 42, 'min': 0, 'max': 999_999_999,
+         'pin_only': True,
          'tooltip': '固定为正数可复现同一结果；换种子多试几次挑最佳'},
         {'id': 'export_texmap', 'label': '导出纹理贴图', 'type': 'select', 'default': 0,
          'options': [

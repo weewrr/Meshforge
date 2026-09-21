@@ -7,6 +7,7 @@
 
 import { useState } from 'react'
 import type { AgentAction } from '../../../api'
+import { useT } from '../../../i18n'
 
 // ─── 动作卡片 ─────────────────────────────────────────────────────────────────
 /**
@@ -31,6 +32,7 @@ export const TOOL_LABELS: Record<string, string> = {
 
 /** 动作汇总卡片。`onUndo` 缺省时不显示撤销按钮。 */
 export function ActionsCard({ actions, onUndo }: { actions: AgentAction[]; onUndo?: () => void }) {
+  const t = useT()
   const [expanded, setExpanded] = useState(false)
   // 只有真正改动过网格的动作才可撤销——查询类动作没有可回滚的副作用。
   const meshActions = actions.filter((a) => a.payload?.type === 'mesh_update')
@@ -40,18 +42,21 @@ export function ActionsCard({ actions, onUndo }: { actions: AgentAction[]; onUnd
     <div className="gp-chat__actions">
       <div className="gp-chat__actionshead">
         <span className="gp-chat__actionslabel">
-          {actions.length} action{actions.length > 1 ? 's' : ''} performed
+          {t(
+            actions.length > 1 ? 'common.actionsPerformedPlural' : 'common.actionsPerformed',
+            { count: actions.length }
+          )}
         </span>
         <div className="gp-chat__actionstools">
           {canUndo && (
-            <button className="gp-chat__actionsundo" onClick={onUndo} title="Undo">
+            <button className="gp-chat__actionsundo" onClick={onUndo} title={t('common.undo')}>
               <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M3 7v6h6" /><path d="M3 13a9 9 0 1 0 2.28-5.93" />
               </svg>
-              Undo
+              {t('common.undoLabel')}
             </button>
           )}
-          <button className="gp-chat__actionscaret" onClick={() => setExpanded((v) => !v)} title="Expand">
+          <button className="gp-chat__actionscaret" onClick={() => setExpanded((v) => !v)} title={t('common.expand')}>
             <svg aria-hidden="true"
               width="11"
               height="11"

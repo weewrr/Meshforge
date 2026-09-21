@@ -30,9 +30,21 @@ export default defineConfig({
           // 只被懒加载的 Viewer3D 引用，独立成 three-vendor chunk 后仍按需加载，
           // 但与 Viewer3D 业务代码解耦——业务改动不再使 1MB+ 的 three 缓存失效；
           // 其余 node_modules 归入 vendor，与业务代码分离以改善缓存命中。
+          //
+          // 匹配用「node_modules/<包名>」路径段前缀而非子串包含：
+          // 原先的 id.includes('three') 会误伤任何路径中恰好含 three 的模块
+          // （例如某依赖的深层目录名），把无关代码塞进 three-vendor。
           manualChunks(id: string) {
-            if (!id.includes('node_modules')) return undefined
-            if (id.includes('three') || id.includes('troika')) return 'three-vendor'
+            const m = id.match(/node_modules[/\\](.+)/)
+            if (!m) return undefined
+            // 取包名：处理 @scope/pkg 与 pkg 两种形态
+            const seg = m[1].split(/[/\\]/)
+            const pkg = seg[0].startsWith('@') ? `${seg[0]}/${seg[1]}` : seg[0]
+            if (pkg === 'three' || pkg.startsWith('three-') || pkg.startsWith('@react-three/')) {
+              return 'three-vendor'
+            }
+            // troika-* 是 three 生态的文字渲染依赖
+            if (pkg.startsWith('troika-')) return 'three-vendor'
             return 'vendor'
           }
         }

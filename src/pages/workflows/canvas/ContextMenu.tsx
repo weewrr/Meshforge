@@ -1,4 +1,4 @@
-// Blueprint Context Sensitive Actions：右键节点弹出的动作菜单。
+// Blueprint Context Sensitive Actions：右键节点（或空白画布）弹出的动作菜单。
 
 import type { WFNode } from '../../../types'
 import { useT } from '../../../i18n'
@@ -6,11 +6,12 @@ import { useT } from '../../../i18n'
 export function ContextMenu({
   x,
   y,
-  count,
-  groupable,
+  count = 0,
+  groupable = 0,
   comment,
-  canFold,
-  isSubgraph,
+  canFold = false,
+  isSubgraph = false,
+  onAddNode,
   onDuplicate,
   onDelete,
   onGroupComment,
@@ -22,20 +23,22 @@ export function ContextMenu({
   x: number
   y: number
   /** 右键目标节点数（含多选） */
-  count: number
+  count?: number
   /** 可框选为注释框的节点数 */
-  groupable: number
+  groupable?: number
   /** 右键目标正好是一个注释框时传入，用于显示折叠/展开入口 */
   comment?: WFNode
-  canFold: boolean
-  isSubgraph: boolean
-  onDuplicate: () => void
-  onDelete: () => void
-  onGroupComment: () => void
-  onToggleCommentCollapse: () => void
-  onFold: () => void
-  onExpand: () => void
-  onToggleBreakpoint: () => void
+  canFold?: boolean
+  isSubgraph?: boolean
+  /** 右键空白画布 → 在落点打开"添加节点"面板 */
+  onAddNode?: () => void
+  onDuplicate?: () => void
+  onDelete?: () => void
+  onGroupComment?: () => void
+  onToggleCommentCollapse?: () => void
+  onFold?: () => void
+  onExpand?: () => void
+  onToggleBreakpoint?: () => void
 }) {
   const t = useT()
 
@@ -45,20 +48,32 @@ export function ContextMenu({
       // 把菜单限制在视口内：减去预估宽（200）/高（180），避免贴边被裁。
       style={{ left: Math.min(x, window.innerWidth - 200), top: Math.min(y, window.innerHeight - 180) }}
     >
-      <button className="wf-node-menu__item" onClick={onDuplicate}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-          <rect x="9" y="9" width="12" height="12" rx="2" />
-          <path d="M5 15V5a2 2 0 0 1 2-2h10" />
-        </svg>
-        {t('workflows.ctxMenu.nodeDuplicate')}
-      </button>
-      <button className="wf-node-menu__item" onClick={onDelete}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
-        </svg>
-        {t('workflows.ctxMenu.nodeDelete')}
-      </button>
-      {groupable > 1 && (
+      {onAddNode && (
+        <button className="wf-node-menu__item" onClick={onAddNode}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          {t('workflows.ctxMenu.paneAddNode')}
+        </button>
+      )}
+      {onDuplicate && (
+        <button className="wf-node-menu__item" onClick={onDuplicate}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="12" height="12" rx="2" />
+            <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+          </svg>
+          {t('workflows.ctxMenu.nodeDuplicate')}
+        </button>
+      )}
+      {onDelete && (
+        <button className="wf-node-menu__item" onClick={onDelete}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
+          </svg>
+          {t('workflows.ctxMenu.nodeDelete')}
+        </button>
+      )}
+      {groupable > 1 && onGroupComment && (
         <>
           <div className="wf-node-menu__sep" />
           <button className="wf-node-menu__item" onClick={onGroupComment}>
@@ -78,7 +93,7 @@ export function ContextMenu({
           {t(comment.data?.params?.collapsed ? 'workflows.ctxMenu.nodeExpandComment' : 'workflows.ctxMenu.nodeCollapseComment')}
         </button>
       ) : null}
-      {canFold && (
+      {canFold && onFold && (
         <button className="wf-node-menu__item" onClick={onFold}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 7h16M4 12h16M4 17h10" />
@@ -87,7 +102,7 @@ export function ContextMenu({
           {t('workflows.ctxMenu.foldToFunction')}
         </button>
       )}
-      {isSubgraph && (
+      {isSubgraph && onExpand && (
         <button className="wf-node-menu__item" onClick={onExpand}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 7h16M4 12h16M4 17h10" />
@@ -97,7 +112,7 @@ export function ContextMenu({
           {t('workflows.ctxMenu.expandFunction')}
         </button>
       )}
-      {count === 1 && (
+      {count === 1 && onToggleBreakpoint && (
         <>
           <div className="wf-node-menu__sep" />
           <button className="wf-node-menu__item" onClick={onToggleBreakpoint}>

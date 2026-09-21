@@ -25,6 +25,7 @@ import {
   type WFEdge,
   type WFNode
 } from '../../types'
+import { getT } from '../../i18n'
 import type { EngineCtx } from './engine-context'
 import { Cancelled, loopSegment, topoSort, urlToFile, whileBodyNodes } from './helpers'
 import { readOutput, registerDispatchers, rt, storeOutput } from './runtime'
@@ -116,7 +117,7 @@ export async function runLoopOn(
       if (rt.cancelRequested) throw new Cancelled()
       setNodeState(id, 'waiting')
       set({ runState: 'paused', activeNodeId: id })
-      logger.info(`${label}: paused — Continue 或 Retry`)
+      logger.info(getT('workflows.runLog.pausedContinue', { label }))
       const action = await new Promise<'continue' | 'retry'>((resolve) => {
         rt.whileResolve = resolve
       })
@@ -280,7 +281,7 @@ export async function runExecGraphOn(
     if (node.type === 'eventCallNode') {
       const name = String(node.data.params?.[DISPATCHER_PARAM] ?? '').trim()
       const binds = name ? rt.boundDispatchers.get(name) ?? [] : []
-      if (binds.length === 0) logger.warn(`${node.data.label}: 事件 '${name}' 没有任何 Bind 绑定`)
+      if (binds.length === 0) logger.warn(getT('workflows.runLog.noBindings', { label: node.data.label, name }))
       for (const bindId of binds) {
         for (const e of allEdges) {
           if (e.source !== bindId || e.sourceHandle !== EXEC_OUT_HANDLE) continue
@@ -306,8 +307,10 @@ export async function runExecGraphOn(
   )
   for (const r of roots) await executeNode(r.id)
 
-  // 兜底：未被 exec 链覆盖的数据节点（纯数据子图 / 旁路数据）按数据 DAG 顺序执行。
-  const remaining = allNodes.filter((n) => !executed.has(n.id))
+  // 兜底：未被 exec 链覆盖的**数据**节点（纯数据子图 / 旁路数据）按数据 DAG 顺序执行。
+  // 必须排除流程节点：Branch/Sequence 没走到的出口下游本身就是"不该执行"的，
+  // 若在这里被补跑，分支门控就完全失效了（两条分支的副作用都会发生）。
+  const remaining = allNodes.filter((n) => !executed.has(n.id) && !isExecNode(n.type))
   if (remaining.length > 0) {
     for (const id of topoSort(remaining, allEdges)) {
       if (rt.cancelRequested) throw new Cancelled()

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" width="1600" height="600"
      role="img" aria-label="MeshForge runtime architecture">
   <title>MeshForge runtime architecture</title>
-  <desc>Electron main process spawns and watches a local Python FastAPI backend on port 8766; the React renderer talks to it over HTTP, SSE and IPC.</desc>
+  <desc>Electron main process spawns and watches a local Python FastAPI backend (port 8766 or the next free one); the React renderer talks to it over HTTP, SSE and IPC.</desc>
   <style>
     .t1   { fill: #0d1526; }
     .t2   { fill: #4a5768; }
@@ -76,7 +76,7 @@
   <text x="678" y="398" class="sans t3" font-size="13.5">Three.js + grid floor</text>
   <rect x="1160" y="120" width="380" height="316" rx="16" class="card"/>
   <rect x="1160" y="120" width="5" height="316" rx="2.5" fill="#34d399"/>
-  <text x="1188" y="164" class="sans t1" font-size="21" font-weight="600">Python · FastAPI :8766</text>
+  <text x="1188" y="164" class="sans t1" font-size="21" font-weight="600">Python · FastAPI :8766+</text>
   <rect x="1188" y="204" width="324" height="62" rx="10" class="box"/>
   <circle cx="1210" cy="235" r="4.5" fill="#34d399"/>
   <text x="1228" y="230" class="mono t1" font-size="14.5">Routers</text>

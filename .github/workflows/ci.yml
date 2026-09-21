@@ -25,6 +25,15 @@ jobs:
       - name: Typecheck (web)
         run: npm run typecheck:web
 
+      # 渲染层单测：纯离线（esbuild 内存转译 + 桩模块），不依赖后端与网络。
+      # test:toolbar 是纯 CSS 契约检查（解析 workflows.css / shell.css 的声明），同样离线。
+      - name: Unit tests (renderer stores / workflow nodes / node UI / toolbar layout)
+        run: |
+          npm run test:web
+          npm run test:nodes
+          npm run test:ui
+          npm run test:toolbar
+
       - name: Build (electron-vite)
         run: npm run build
 
@@ -43,20 +52,27 @@ jobs:
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
+          # 依赖清单唯一事实来源 = server/requirements*.txt，不在 workflow 里硬编码包名。
+          # requirements.txt    运行时可依赖（fastapi/pydantic/pillow/psutil/pymeshlab…）
+          # requirements-dev.txt 仅 CI/测试需要（httpx）
+          pip install -r server/requirements.txt -r server/requirements-dev.txt
+          # MCP stdio server 的可选依赖（smoke test 需要 mcp 包）
           pip install -r server/requirements-mcp.txt
-          # 与 server/requirements.txt 保持同步：system_stats 用 psutil，
-          # 图像路由用 pillow。pymeshlab 等重依赖仅推理服务需要，CI 不装。
-          pip install fastapi uvicorn pydantic numpy trimesh httpx psutil pillow
 
       - name: Syntax check (py_compile)
         run: python -m compileall server -q
 
-      - name: Unit tests (path boundaries / workflows / jobs)
+      - name: Unit tests (path boundaries / workflows / jobs / model downloads / node params / disabled extensions)
         working-directory: server
         run: |
           python tests/test_paths.py
           python tests/test_jobs.py
           python tests/test_workflows.py
+          python tests/test_model_downloads.py
+          python tests/test_multiview_params.py
+          python tests/test_generator_node_params.py
+          python tests/test_image_node_params.py
+          python tests/test_disabled_extensions.py
 
       - name: OpenAPI contract snapshot check
         run: python scripts/export_openapi.py --check
@@ -82,8 +98,8 @@ jobs:
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r server/requirements.txt -r server/requirements-dev.txt
           pip install -r server/requirements-mcp.txt
-          pip install fastapi uvicorn pydantic numpy trimesh httpx psutil pillow
 
       - name: Start backend and smoke test
         env:
@@ -220,8 +236,8 @@ jobs:
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r server/requirements.txt -r server/requirements-dev.txt
           pip install -r server/requirements-mcp.txt
-          pip install fastapi uvicorn pydantic numpy trimesh httpx psutil pillow
 
       - name: pip check
         run: python -m pip check
@@ -247,8 +263,17 @@ jobs:
           node-version: 22
           cache: npm
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Prepare bundled Python runtime (embeddable + deps incl. modelscope)
+        # 随包分发的自包含运行时：让安装包在未装 Python 的机器上也能运行后端
+        # 与模型下载。会下载解释器并安装后端依赖，耗时数分钟。
+        run: python scripts/prepare_bundled_python.py
 
       - name: Build + pack (electron-builder --dir)
         run: npm run pack
@@ -258,6 +283,12 @@ jobs:
         run: |
           if (-not (Test-Path 'dist/win-unpacked/resources/server/main.py')) {
             throw 'resources/server/main.py missing from package'
+          }
+          if (-not (Test-Path 'dist/win-unpacked/resources/server/.runtime/python/python.exe')) {
+            throw 'bundled Python runtime missing from package'
+          }
+          if (-not (Test-Path 'dist/win-unpacked/resources/server/.runtime/python/Scripts/modelscope.exe')) {
+            throw 'modelscope CLI missing from bundled runtime'
           }
           if (Test-Path 'dist/win-unpacked/resources/app.asar') {
             Write-Host 'app.asar present (expected); server must live in resources/server'

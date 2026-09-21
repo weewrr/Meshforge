@@ -11,6 +11,7 @@ import {
   type WFNode,
   type WFEdge
 } from '../../types'
+import { getT } from '../../i18n'
 import { useSceneStore } from '../scene'
 import type { EngineLogger } from './engine-context'
 import { nodeExtensionId } from './helpers'
@@ -38,36 +39,44 @@ export function collectPreflightIssues(
     const params = node.data.params
     if (node.type === 'imageNode' && !params.url) {
       if (overrideAvailable) overrideAvailable = false
-      else issues.push(`${label}: 未选择图片`)
+      else issues.push(getT('workflows.runLog.noImageSelected', { label }))
     }
     if (node.type === 'meshNode') {
       if (String(params.source ?? 'file') === 'current') {
         if (!useSceneStore.getState().meshUrl) {
-          issues.push(`${label}: 3D 查看器中没有当前模型`)
+          issues.push(getT('workflows.runLog.noCurrentMesh', { label }))
         }
       } else if (!params.url) {
-        issues.push(`${label}: 未选择网格文件`)
+        issues.push(getT('workflows.runLog.noMeshFileSelected', { label }))
       }
     }
     if (node.type === 'generatorNode' && !params.generatorId) {
-      issues.push(`${label}: 未选择生成器`)
+      issues.push(getT('workflows.runLog.noGeneratorSelected', { label }))
     }
     if (node.type === 'generatorNode' && !hasIncoming) {
-      issues.push(`${label}: 需要上游图片连接`)
+      issues.push(getT('workflows.runLog.needsImageUpstream', { label }))
     }
     if (node.type === 'extensionNode') {
       const ext = getExtensionById(nodeExtensionId(node))
       if (!ext) {
-        issues.push(`${label}: 未知扩展`)
+        issues.push(getT('workflows.runLog.unknownExtension', { label }))
       } else if (!hasIncoming) {
-        issues.push(`${label}: 需要上游${ext.kind === 'model' ? '图片' : '网格'}连接`)
+        // 扩展是模型类还是网格类，决定上游端口类型的措辞。
+        issues.push(
+          getT(
+            ext.kind === 'model'
+              ? 'workflows.runLog.needsUpstreamImage'
+              : 'workflows.runLog.needsUpstreamMesh',
+            { label }
+          )
+        )
       }
     }
     if (
       (node.type === 'previewNode' || node.type === 'outputNode' || node.type === 'waitNode') &&
       !hasIncoming
     ) {
-      issues.push(`${label}: 缺少输入连接`)
+      issues.push(getT('workflows.runLog.missingInput', { label }))
     }
   }
   // 变量 / 事件分发器的"编译期检查"：只提示，不阻断运行（图可能仍在搭建中）。
@@ -80,12 +89,13 @@ export function collectPreflightIssues(
   for (const node of nodes) {
     if (node.type === 'variableGetNode') {
       const name = String(node.data.params?.[VAR_NAME_PARAM] ?? '').trim()
-      if (!name) logger.warn(`preflight: ${node.data.label}: 未设置变量名`)
-      else if (!declaredVars.has(name)) logger.warn(`preflight: ${node.data.label}: 变量『${name}』没有任何 Set 节点声明`)
+      const label = node.data.label
+      if (!name) logger.warn(getT('workflows.runLog.varNameNotSet', { label }))
+      else if (!declaredVars.has(name)) logger.warn(getT('workflows.runLog.varUndeclared', { label, name }))
     }
     if (node.type === 'eventCallNode') {
       const name = String(node.data.params?.[DISPATCHER_PARAM] ?? '').trim()
-      if (!name) logger.warn(`preflight: ${node.data.label}: 未设置事件名`)
+      if (!name) logger.warn(getT('workflows.runLog.eventNameNotSet', { label: node.data.label }))
     }
   }
   return issues

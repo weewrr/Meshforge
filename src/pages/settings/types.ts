@@ -8,4 +8,4 @@
 // 设置页左导航的分组标识（与 App 侧的页面 id 无关）。
 
 /** 设置页左侧导航的分组标识。 */
-export type SectionId = 'application' | 'storage' | 'integrations' | 'performance' | 'agent' | 'logs' | 'about'
+export type SectionId = 'application' | 'storage' | 'integrations' | 'performance' | 'agent' | 'logs' | 'about' | 'modeldl'

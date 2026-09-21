@@ -657,6 +657,23 @@
         "title": "ReadyOut",
         "type": "object"
       },
+      "RestoreBody": {
+        "description": "恢复（取消停用）扩展的请求体。",
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "RestoreBody",
+        "type": "object"
+      },
       "RuntimeOut": {
         "description": "GET /settings/runtime —— 后端实际生效配置与未接线标记。",
         "properties": {
@@ -999,7 +1016,7 @@
     },
     "/extensions": {
       "get": {
-        "description": "列出全部 schema 驱动的扩展。\n\n包含内置模型生成器 + 内置处理工具 + extensions/ 目录下发现的 manifest 扩展。\n\nReturns:\n    扩展描述字典列表（id / display_name / kind / input / output /\n    category / params，manifest 扩展还会带上 HF 下载相关字段）。",
+        "description": "列出全部 schema 驱动的扩展（**不含**被用户停用的内置扩展）。\n\n包含内置模型生成器 + 内置处理工具 + extensions/ 目录下发现的 manifest 扩展。\n模型生成器那一半在 `registry._generators` 里已经剔除了停用项（`register()`\n装载时跳过）；`PROCESS_EXTENSIONS` 是 router 里的字面量列表，绕过了 registry，\n因此这里再按停用集合过滤一次。\n\nReturns:\n    扩展描述字典列表（id / display_name / kind / input / output /\n    category / params / builtin，manifest 扩展还会带上 HF 下载相关字段）。\n    `builtin=True` 表示代码内置、卸载只会停用（可经 `/extensions/restore` 恢复）。",
         "operationId": "list_extensions_extensions_get",
         "responses": {
           "200": {
@@ -1026,7 +1043,7 @@
     },
     "/extensions/": {
       "get": {
-        "description": "列出全部 schema 驱动的扩展。\n\n包含内置模型生成器 + 内置处理工具 + extensions/ 目录下发现的 manifest 扩展。\n\nReturns:\n    扩展描述字典列表（id / display_name / kind / input / output /\n    category / params，manifest 扩展还会带上 HF 下载相关字段）。",
+        "description": "列出全部 schema 驱动的扩展（**不含**被用户停用的内置扩展）。\n\n包含内置模型生成器 + 内置处理工具 + extensions/ 目录下发现的 manifest 扩展。\n模型生成器那一半在 `registry._generators` 里已经剔除了停用项（`register()`\n装载时跳过）；`PROCESS_EXTENSIONS` 是 router 里的字面量列表，绕过了 registry，\n因此这里再按停用集合过滤一次。\n\nReturns:\n    扩展描述字典列表（id / display_name / kind / input / output /\n    category / params / builtin，manifest 扩展还会带上 HF 下载相关字段）。\n    `builtin=True` 表示代码内置、卸载只会停用（可经 `/extensions/restore` 恢复）。",
         "operationId": "list_extensions_extensions__get",
         "responses": {
           "200": {
@@ -1046,6 +1063,30 @@
           }
         },
         "summary": "List Extensions",
+        "tags": [
+          "extensions"
+        ]
+      }
+    },
+    "/extensions/disabled": {
+      "get": {
+        "description": "列出当前被停用（卸载）的**内置**扩展——它们都能恢复。\n\n模型页据此渲染\"已停用\"条带，让用户知道内置扩展没被删掉、随时能放回来。\n\nReturns:\n    `{'ids': [...], 'items': [{'id', 'display_name', 'kind', 'category'}]}`；\n    items 的顺序为先内置模型生成器、后内置网格工具，与列表页的分组顺序一致。",
+        "operationId": "list_disabled_extensions_extensions_disabled_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Disabled Extensions Extensions Disabled Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Disabled Extensions",
         "tags": [
           "extensions"
         ]
@@ -1231,9 +1272,53 @@
         ]
       }
     },
+    "/extensions/restore": {
+      "post": {
+        "description": "恢复（取消停用）一个或多个内置扩展。\n\n恢复 = 从停用记录里删掉 + 把实例放回可用集合（内置实例一直留在\n`registry._all_generators` 里，所以不需要重启、也不用重跑构造代码）。\n\nArgs:\n    body: `{'ids': ['mvdream', ...]}`。\n\nReturns:\n    `{'ok': True, 'restored': [本次真正从\"停用\"变回\"可用\"的 id]}`；不在停用集合\n    里的 id 会被静默忽略（幂等，前端\"全部恢复\"多传几个也无害）。\n\nRaises:\n    HTTPException: 某个 id 不合法（400）。",
+        "operationId": "restore_extensions_extensions_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Restore Extensions Extensions Restore Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Extensions",
+        "tags": [
+          "extensions"
+        ]
+      }
+    },
     "/extensions/uninstall": {
       "post": {
-        "description": "删除扩展目录（若存在）并从注册表注销。\n\nReturns:\n    `{'ok': True, 'removed': 是否真的删掉了目录, 'id': ...}`。",
+        "description": "卸载扩展——对两种扩展语义不同，返回体用 `builtin` 区分。\n\n- **清单扩展**（`extensions/<id>/`）：真删目录，重启后扫描不到，天然持久。\n- **内置扩展**（代码注册的模型生成器 / 内置网格处理工具）：磁盘上本就没有目录\n  可删，卸载 = **停用**：id 写进 `disabled-extensions.json`，`register()` 下次\n  装载时跳过。这就是旧实现缺的那一环——旧版只摘内存、不落盘，重启后模块重新\n  导入又把扩展装回来，用户看到的正是\"卸载了但重启就恢复\"。\n\nArgs:\n    body: `{'id': 扩展 id}`。\n\nReturns:\n    `{'ok': True, 'removed': 是否真删了目录, 'builtin': 是否为内置（只能停用）,\n    'id': ...}`。\n\nRaises:\n    HTTPException: id 非法（400）；该 id 既无目录也非内置扩展（404）。",
         "operationId": "uninstall_extension_extensions_uninstall_post",
         "requestBody": {
           "content": {
@@ -1617,6 +1702,71 @@
         "summary": "List Library",
         "tags": [
           "library"
+        ]
+      }
+    },
+    "/model-services/download/status": {
+      "get": {
+        "description": "返回模型的安装态与 modelscope CLI 可用性，供设置页渲染卡片清单。\n\nReturns:\n    ``{'modelscopeAvailable': bool, 'modelscopeVersion': str|null,\n    'services': [{key,label,modelscopeId,hfRef,localDir,installed,sizeBytes}]}``",
+        "operationId": "download_status_model_services_download_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Download Status Model Services Download Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Download Status",
+        "tags": [
+          "model-services"
+        ]
+      }
+    },
+    "/model-services/download/{key}": {
+      "post": {
+        "description": "以 SSE 流式调用 ModelScope CLI 下载指定服务的权重。\n\nSSE 数据事件：`{\"status\": \"...\"}`（modelscope 输出行）。\n终止事件：`{\"done\": true}` 或 `{\"error\": \"...\"}`。",
+        "operationId": "model_download_model_services_download__key__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Model Download",
+        "tags": [
+          "model-services"
         ]
       }
     },

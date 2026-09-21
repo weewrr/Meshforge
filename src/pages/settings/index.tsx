@@ -12,6 +12,7 @@ import { SECTIONS } from './nav'
 import { ApplicationSection } from './sections/ApplicationSection'
 import { StorageSection } from './sections/StorageSection'
 import { IntegrationsSection } from './sections/IntegrationsSection'
+import { ModelDownloadSection } from './sections/ModelDownloadSection'
 import { PerformanceSection } from './sections/PerformanceSection'
 import { AgentSection } from './sections/AgentSection'
 import { LogsSection } from './sections/LogsSection'
@@ -45,6 +46,7 @@ export default function SettingsPage() {
           {section === 'storage' && <StorageSection />}
           {section === 'integrations' && <IntegrationsSection />}
           {section === 'performance' && <PerformanceSection />}
+          {section === 'modeldl' && <ModelDownloadSection />}
           {section === 'agent' && <AgentSection />}
           {section === 'logs' && <LogsSection />}
           {section === 'about' && <AboutSection />}

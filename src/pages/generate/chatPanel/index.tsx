@@ -412,8 +412,8 @@ export default function ChatPanel() {
                   <button
                     // 按下标剔除该项（附件只在本次输入内有效，无重排风险）。
                     onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
-                    title="Remove"
-                    aria-label="Remove"
+                    title={t('common.remove')}
+                    aria-label={t('common.remove')}
                   >
                     <svg aria-hidden="true" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                       <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -428,7 +428,7 @@ export default function ChatPanel() {
             value={input}
             // 从 1 行起，随内容长高（见 adjustHeight）。
             rows={1}
-            placeholder="Ask Meshforge…"
+            placeholder={t('common.chatPlaceholder')}
             spellCheck={false}
             onChange={(e) => { setInput(e.target.value); adjustHeight() }}
             onKeyDown={(e) => {
@@ -438,7 +438,7 @@ export default function ChatPanel() {
           />
           <div className="gp-chat__boxfoot">
             <div className="gp-chat__boxtools">
-              <button title="Attach image" aria-label="Attach image" onClick={openImagePicker} className="gp-chat__toolbtn">
+              <button title={t('common.attachImage')} aria-label={t('common.attachImage')} onClick={openImagePicker} className="gp-chat__toolbtn">
                 <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
                 </svg>

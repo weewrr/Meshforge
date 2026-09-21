@@ -1,0 +1,6 @@
+# 仅 CI / 测试环境需要的额外依赖（运行时不需要）。
+# 与 server/requirements.txt 配合使用：
+#   pip install -r server/requirements.txt -r server/requirements-dev.txt
+#
+# httpx：MCP stdio smoke test 与集成测试用它发 HTTP 请求。
+httpx>=0.27

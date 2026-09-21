@@ -66,10 +66,15 @@ export async function installExtensionStatus(): Promise<InstallProgress | null> 
  *
  * 同样以 `{ ok, message }` 表达结果，不向上抛错。
  *
+ * **两种语义**：清单扩展（`extensions/<id>/`）是真删目录；内置扩展磁盘上没有目录，
+ * 卸载 = 停用（记进后端停用表，跨重启保持隐藏）。`builtin` 字段让调用方切换文案。
+ *
  * @param id 要卸载的扩展 id。
- * @returns 卸载结果。
+ * @returns 卸载结果；`builtin` 为 true 表示只是停用、可恢复。
  */
-export async function uninstallExtension(id: string): Promise<{ ok: boolean; message: string }> {
+export async function uninstallExtension(
+  id: string
+): Promise<{ ok: boolean; message: string; builtin: boolean }> {
   const res = await apiFetch(`${API_BASE}/extensions/uninstall`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -77,9 +82,73 @@ export async function uninstallExtension(id: string): Promise<{ ok: boolean; mes
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
-    return { ok: false, message: (body as { detail?: string }).detail ?? `uninstall failed: ${res.status}` }
+    return {
+      ok: false,
+      message: (body as { detail?: string }).detail ?? `uninstall failed: ${res.status}`,
+      builtin: false
+    }
   }
-  return { ok: true, message: 'uninstalled' }
+  return { ok: true, message: 'uninstalled', builtin: (body as { builtin?: boolean }).builtin === true }
+}
+
+/** 已停用（可恢复）的内置扩展条目。 */
+export interface DisabledExtension {
+  /** 扩展 id。 */
+  id: string
+  /** 后端给到的原始显示名（未本地化）。 */
+  display_name: string
+  /** 类别：模型生成器或网格处理工具。 */
+  kind: 'model' | 'process'
+  /** 更细的分类（生视图 / 图像 / 网格 / 处理）。 */
+  category?: string
+}
+
+/**
+ * 列出被停用的内置扩展。
+ *
+ * 用于模型页渲染"已停用"条带——内置扩展卸载后并非消失，而是被记进了停用表，
+ * 用户可以在这里把它们放回来。
+ *
+ * @returns 停用项列表；请求失败时返回空数组（条带不显示即可，不阻断页面）。
+ */
+export async function listDisabledExtensions(): Promise<DisabledExtension[]> {
+  try {
+    const res = await apiFetch(`${API_BASE}/extensions/disabled`)
+    if (!res.ok) return []
+    const data = (await res.json()) as { items?: DisabledExtension[] }
+    return data.items ?? []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 恢复（取消停用）指定的内置扩展。
+ *
+ * @param ids 要恢复的扩展 id 列表。
+ * @returns 恢复结果；`restored` 为真正恢复注册的 id（不在停用表里的会被忽略）。
+ */
+export async function restoreExtensions(
+  ids: string[]
+): Promise<{ ok: boolean; message: string; restored: string[] }> {
+  try {
+    const res = await apiFetch(`${API_BASE}/extensions/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return {
+        ok: false,
+        message: (body as { detail?: string }).detail ?? `restore failed: ${res.status}`,
+        restored: []
+      }
+    }
+    return { ok: true, message: 'restored', restored: (body as { restored?: string[] }).restored ?? [] }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e), restored: [] }
+  }
 }
 
 /**

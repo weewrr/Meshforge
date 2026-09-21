@@ -16,6 +16,7 @@
 import { cancelJob, getJob } from '../../api'
 import { VAR_NAME_PARAM, isExecEdge, type WFEdge, type WFNode } from '../../types'
 import { useLogsStore } from '../logs'
+import { getT } from '../../i18n'
 import type { EngineCtx, EngineSet, EngineGet } from './engine-context'
 import { execNode as execNodeImpl } from './executors'
 import { Cancelled, sleep } from './helpers'
@@ -106,7 +107,7 @@ export function createEngine(set: EngineSet, get: EngineGet): RunEngine {
     if (bp) rt.bpConsumed.add(node.id)
     setNodeState(node.id, 'waiting')
     set({ runState: 'paused', activeNodeId: node.id, pausedAt: node.id })
-    logger.info(`${node.data.label}: 已暂停 — 单步 / 继续`)
+    logger.info(getT('workflows.runLog.paused', { label: node.data.label }))
     // 挂起在这里等 UI 放行；resolve 函数被存到 rt.pauseGateResolve 供 stepOver/continueRun 调用。
     const action = await new Promise<'continue' | 'step'>((resolve) => {
       rt.pauseGateResolve = resolve
@@ -200,7 +201,7 @@ export function createEngine(set: EngineSet, get: EngineGet): RunEngine {
       // 任意（子）图执行器：execNode 在处理 subgraphNode 时回调它内联执行函数体。
       rt.innerGraphRunner = async (nodes, graphEdges, depth) => {
         if (depth > MAX_GRAPH_DEPTH) {
-          logger.warn(`子图嵌套超过 ${MAX_GRAPH_DEPTH} 层，已停止下钻`)
+          logger.warn(getT('workflows.runLog.depthExceeded', { depth: MAX_GRAPH_DEPTH }))
           return
         }
         const map = new Map(nodes.map((n) => [n.id, n]))

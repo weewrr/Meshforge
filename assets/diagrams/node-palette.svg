@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 474" width="1440" height="474"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 776" width="1600" height="776"
      role="img" aria-label="MeshForge node types">
   <title>MeshForge node types</title>
-  <desc>The nine built-in node types with their port types: Image, Text, Load 3D Mesh, Generate Mesh, Preview, Add to Scene, Wait, While and For Each.</desc>
+  <desc>Thirty-seven built-in node types in seven groups: I/O, flow control, compute, variables, event dispatchers, subgraph/extension and comment.</desc>
   <style>
     .t1   { fill: #0d1526; }
     .t2   { fill: #4a5768; }
@@ -42,73 +42,122 @@
     </marker>
   </defs>
 
-  <rect x="40" y="40" width="440" height="118" rx="12" class="card"/>
-  <rect x="60" y="64" width="12" height="12" rx="3" fill="#38bdf8"/>
-  <text x="84" y="76" class="sans t1" font-size="19" font-weight="600">Image</text>
-  <text x="60" y="102" class="sans t3" font-size="14">Pick the source photo</text>
-  <rect x="60" y="118" width="62" height="24" rx="12" fill="#38bdf8" fill-opacity="0.14" stroke="#38bdf8" stroke-opacity="0.55"/>
-  <text x="91" y="134" text-anchor="middle" class="mono" font-size="11.5" fill="#38bdf8">image</text>
-  <rect x="500" y="40" width="440" height="118" rx="12" class="card"/>
-  <rect x="520" y="64" width="12" height="12" rx="3" fill="#fbbf24"/>
-  <text x="544" y="76" class="sans t1" font-size="19" font-weight="600">Text</text>
-  <text x="520" y="102" class="sans t3" font-size="14">Prompt or extra parameters</text>
-  <rect x="520" y="118" width="54" height="24" rx="12" fill="#fbbf24" fill-opacity="0.14" stroke="#fbbf24" stroke-opacity="0.55"/>
-  <text x="547" y="134" text-anchor="middle" class="mono" font-size="11.5" fill="#fbbf24">text</text>
-  <rect x="960" y="40" width="440" height="118" rx="12" class="card"/>
-  <rect x="980" y="64" width="12" height="12" rx="3" fill="#a78bfa"/>
-  <text x="1004" y="76" class="sans t1" font-size="19" font-weight="600">Load 3D Mesh</text>
-  <text x="980" y="102" class="sans t3" font-size="14">Import an existing mesh</text>
-  <rect x="980" y="118" width="54" height="24" rx="12" fill="#a78bfa" fill-opacity="0.14" stroke="#a78bfa" stroke-opacity="0.55"/>
-  <text x="1007" y="134" text-anchor="middle" class="mono" font-size="11.5" fill="#a78bfa">mesh</text>
-  <rect x="40" y="178" width="440" height="118" rx="12" class="card"/>
-  <rect x="60" y="202" width="12" height="12" rx="3" fill="#34d399"/>
-  <text x="84" y="214" class="sans t1" font-size="19" font-weight="600">Generate Mesh</text>
-  <text x="60" y="240" class="sans t3" font-size="14">Run the generator model</text>
-  <rect x="60" y="256" width="62" height="24" rx="12" fill="none" stroke="#38bdf8" stroke-opacity="0.45"/>
-  <text x="91" y="272" text-anchor="middle" class="mono" font-size="11.5" fill="#38bdf8">image</text>
-  <path d="M132 268h14" class="ln a" marker-end="url(#arw)"/>
-  <rect x="156" y="256" width="54" height="24" rx="12" fill="#a78bfa" fill-opacity="0.14" stroke="#a78bfa" stroke-opacity="0.55"/>
-  <text x="183" y="272" text-anchor="middle" class="mono" font-size="11.5" fill="#a78bfa">mesh</text>
-  <rect x="500" y="178" width="440" height="118" rx="12" class="card"/>
-  <rect x="520" y="202" width="12" height="12" rx="3" fill="#38bdf8"/>
-  <text x="544" y="214" class="sans t1" font-size="19" font-weight="600">Preview</text>
-  <text x="520" y="240" class="sans t3" font-size="14">Inspect in the 3D viewport</text>
-  <rect x="520" y="256" width="54" height="24" rx="12" fill="none" stroke="#a78bfa" stroke-opacity="0.45"/>
-  <text x="547" y="272" text-anchor="middle" class="mono" font-size="11.5" fill="#a78bfa">mesh</text>
-  <path d="M584 268h14" class="ln a" marker-end="url(#arw)"/>
-  <rect x="608" y="256" width="54" height="24" rx="12" fill="#a78bfa" fill-opacity="0.14" stroke="#a78bfa" stroke-opacity="0.55"/>
-  <text x="635" y="272" text-anchor="middle" class="mono" font-size="11.5" fill="#a78bfa">mesh</text>
-  <rect x="960" y="178" width="440" height="118" rx="12" class="card"/>
-  <rect x="980" y="202" width="12" height="12" rx="3" fill="#a78bfa"/>
-  <text x="1004" y="214" class="sans t1" font-size="19" font-weight="600">Add to Scene</text>
-  <text x="980" y="240" class="sans t3" font-size="14">Hand the result to the scene</text>
-  <rect x="980" y="256" width="54" height="24" rx="12" fill="none" stroke="#a78bfa" stroke-opacity="0.45"/>
-  <text x="1007" y="272" text-anchor="middle" class="mono" font-size="11.5" fill="#a78bfa">mesh</text>
-  <rect x="40" y="316" width="440" height="118" rx="12" class="card"/>
-  <rect x="60" y="340" width="12" height="12" rx="3" fill="#71717a"/>
-  <text x="84" y="352" class="sans t1" font-size="19" font-weight="600">Wait</text>
-  <text x="60" y="378" class="sans t3" font-size="14">Pause between steps</text>
-  <rect x="60" y="394" width="46" height="24" rx="12" fill="none" stroke="#8b93a7" stroke-opacity="0.45"/>
-  <text x="83" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
-  <path d="M116 406h14" class="ln a" marker-end="url(#arw)"/>
-  <rect x="140" y="394" width="46" height="24" rx="12" fill="#8b93a7" fill-opacity="0.14" stroke="#8b93a7" stroke-opacity="0.55"/>
-  <text x="163" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
-  <rect x="500" y="316" width="440" height="118" rx="12" class="card"/>
-  <rect x="520" y="340" width="12" height="12" rx="3" fill="#f59e0b"/>
-  <text x="544" y="352" class="sans t1" font-size="19" font-weight="600">While</text>
-  <text x="520" y="378" class="sans t3" font-size="14">Loop while a condition holds</text>
-  <rect x="520" y="394" width="46" height="24" rx="12" fill="none" stroke="#8b93a7" stroke-opacity="0.45"/>
-  <text x="543" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
-  <path d="M576 406h14" class="ln a" marker-end="url(#arw)"/>
-  <rect x="600" y="394" width="46" height="24" rx="12" fill="#8b93a7" fill-opacity="0.14" stroke="#8b93a7" stroke-opacity="0.55"/>
-  <text x="623" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
-  <rect x="960" y="316" width="440" height="118" rx="12" class="card"/>
-  <rect x="980" y="340" width="12" height="12" rx="3" fill="#38bdf8"/>
-  <text x="1004" y="352" class="sans t1" font-size="19" font-weight="600">For Each</text>
-  <text x="980" y="378" class="sans t3" font-size="14">Iterate over a list</text>
-  <rect x="980" y="394" width="46" height="24" rx="12" fill="none" stroke="#8b93a7" stroke-opacity="0.45"/>
-  <text x="1003" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
-  <path d="M1036 406h14" class="ln a" marker-end="url(#arw)"/>
-  <rect x="1060" y="394" width="46" height="24" rx="12" fill="#8b93a7" fill-opacity="0.14" stroke="#8b93a7" stroke-opacity="0.55"/>
-  <text x="1083" y="410" text-anchor="middle" class="mono" font-size="11.5" fill="#8b93a7">any</text>
+  <text x="30" y="42" class="sans t1" font-size="25" font-weight="600">Thirty-seven node types, seven groups</text>
+  <text x="30" y="70" class="sans t3" font-size="15.5">Every node declares typed ports — the canvas only accepts edges whose port types match.</text>
+  <rect x="30" y="92" width="740" height="146" rx="14" class="card"/>
+  <rect x="30" y="92" width="5" height="146" rx="2.5" fill="#38bdf8"/>
+  <text x="62" y="126" class="sans t1" font-size="19" font-weight="600">I/O</text>
+  <text x="62" y="149" class="sans t3" font-size="13.5">Source media in, results out</text>
+  <rect x="718" y="112" width="32" height="22" rx="11" fill="#38bdf8" fill-opacity="0.15"/>
+  <text x="734" y="127" text-anchor="middle" class="mono" font-size="12.5" fill="#38bdf8">7</text>
+  <rect x="54" y="168" width="62" height="30" rx="15" fill="#38bdf8" fill-opacity="0.11" stroke="#38bdf8" stroke-opacity="0.34"/>
+  <text x="85" y="188" text-anchor="middle" class="mono t1" font-size="13">Image</text>
+  <rect x="124" y="168" width="54.4" height="30" rx="15" fill="#38bdf8" fill-opacity="0.11" stroke="#38bdf8" stroke-opacity="0.34"/>
+  <text x="151.2" y="188" text-anchor="middle" class="mono t1" font-size="13">Text</text>
+  <rect x="186.4" y="168" width="115.2" height="30" rx="15" fill="#38bdf8" fill-opacity="0.11" stroke="#38bdf8" stroke-opacity="0.34"/>
+  <text x="244" y="188" text-anchor="middle" class="mono t1" font-size="13">Load 3D Mesh</text>
+  <rect x="309.6" y="168" width="62" height="30" rx="15" fill="#38bdf8" fill-opacity="0.11" stroke="#38bdf8" stroke-opacity="0.34"/>
+  <text x="340.6" y="188" text-anchor="middle" class="mono t1" font-size="13">Array</text>
+  <rect x="379.6" y="168" width="122.8" height="30" rx="15" fill="#38bdf8" fill-opacity="0.11" stroke="#38bdf8" stroke-opacity="0.34"/>
+  <text x="441" y="188" text-anchor="middle" class="mono t1" font-size="13">Generate Mesh</text>
+  <rect x="510.4" y="168" width="77.2" height="30" rx="15" fill="#38bdf8" fill-opacity="0.11" stroke="#38bdf8" stroke-opacity="0.34"/>
+  <text x="549" y="188" text-anchor="middle" class="mono t1" font-size="13">Preview</text>
+  <rect x="595.6" y="168" width="115.2" height="30" rx="15" fill="#38bdf8" fill-opacity="0.11" stroke="#38bdf8" stroke-opacity="0.34"/>
+  <text x="653.2" y="188" text-anchor="middle" class="mono t1" font-size="13">Add to Scene</text>
+  <rect x="30" y="260" width="740" height="184" rx="14" class="card"/>
+  <rect x="30" y="260" width="5" height="184" rx="2.5" fill="#60a5fa"/>
+  <text x="62" y="294" class="sans t1" font-size="19" font-weight="600">Compute</text>
+  <text x="62" y="317" class="sans t3" font-size="13.5">Blueprints-style pure data nodes</text>
+  <rect x="718" y="280" width="32" height="22" rx="11" fill="#60a5fa" fill-opacity="0.15"/>
+  <text x="734" y="295" text-anchor="middle" class="mono" font-size="12.5" fill="#60a5fa">10</text>
+  <rect x="54" y="336" width="84.8" height="30" rx="15" fill="#60a5fa" fill-opacity="0.11" stroke="#60a5fa" stroke-opacity="0.34"/>
+  <text x="96.4" y="356" text-anchor="middle" class="mono t1" font-size="13">Is Valid</text>
+  <rect x="146.8" y="336" width="84.8" height="30" rx="15" fill="#60a5fa" fill-opacity="0.11" stroke="#60a5fa" stroke-opacity="0.34"/>
+  <text x="189.2" y="356" text-anchor="middle" class="mono t1" font-size="13">Is Empty</text>
+  <rect x="239.6" y="336" width="54.4" height="30" rx="15" fill="#60a5fa" fill-opacity="0.11" stroke="#60a5fa" stroke-opacity="0.34"/>
+  <text x="266.8" y="356" text-anchor="middle" class="mono t1" font-size="13">Bool</text>
+  <rect x="302" y="336" width="54.4" height="30" rx="15" fill="#60a5fa" fill-opacity="0.11" stroke="#60a5fa" stroke-opacity="0.34"/>
+  <text x="329.2" y="356" text-anchor="middle" class="mono t1" font-size="13">Math</text>
+  <rect x="364.4" y="336" width="77.2" height="30" rx="15" fill="#60a5fa" fill-opacity="0.11" stroke="#60a5fa" stroke-opacity="0.34"/>
+  <text x="403" y="356" text-anchor="middle" class="mono t1" font-size="13">Compare</text>
+  <rect x="449.6" y="336" width="107.6" height="30" rx="15" fill="#60a5fa" fill-opacity="0.11" stroke="#60a5fa" stroke-opacity="0.34"/>
+  <text x="503.4" y="356" text-anchor="middle" class="mono t1" font-size="13">Concat Text</text>
+  <rect x="565.2" y="336" width="54.4" height="30" rx="15" fill="#60a5fa" fill-opacity="0.11" stroke="#60a5fa" stroke-opacity="0.34"/>
+  <text x="592.4" y="356" text-anchor="middle" class="mono t1" font-size="13">Cast</text>
+  <rect x="627.6" y="336" width="62" height="30" rx="15" fill="#60a5fa" fill-opacity="0.11" stroke="#60a5fa" stroke-opacity="0.34"/>
+  <text x="658.6" y="356" text-anchor="middle" class="mono t1" font-size="13">Clamp</text>
+  <rect x="54" y="374" width="54.4" height="30" rx="15" fill="#60a5fa" fill-opacity="0.11" stroke="#60a5fa" stroke-opacity="0.34"/>
+  <text x="81.2" y="394" text-anchor="middle" class="mono t1" font-size="13">Lerp</text>
+  <rect x="116.4" y="374" width="69.6" height="30" rx="15" fill="#60a5fa" fill-opacity="0.11" stroke="#60a5fa" stroke-opacity="0.34"/>
+  <text x="151.2" y="394" text-anchor="middle" class="mono t1" font-size="13">Random</text>
+  <rect x="30" y="466" width="740" height="146" rx="14" class="card"/>
+  <rect x="30" y="466" width="5" height="146" rx="2.5" fill="#22d3ee"/>
+  <text x="62" y="500" class="sans t1" font-size="19" font-weight="600">Subgraph / Extension</text>
+  <text x="62" y="523" class="sans t3" font-size="13.5">Fold graphs, plug in models</text>
+  <rect x="718" y="486" width="32" height="22" rx="11" fill="#22d3ee" fill-opacity="0.15"/>
+  <text x="734" y="501" text-anchor="middle" class="mono" font-size="12.5" fill="#22d3ee">4</text>
+  <rect x="54" y="542" width="84.8" height="30" rx="15" fill="#22d3ee" fill-opacity="0.11" stroke="#22d3ee" stroke-opacity="0.34"/>
+  <text x="96.4" y="562" text-anchor="middle" class="mono t1" font-size="13">Function</text>
+  <rect x="146.8" y="542" width="107.6" height="30" rx="15" fill="#22d3ee" fill-opacity="0.11" stroke="#22d3ee" stroke-opacity="0.34"/>
+  <text x="200.6" y="562" text-anchor="middle" class="mono t1" font-size="13">Subgraph In</text>
+  <rect x="262.4" y="542" width="115.2" height="30" rx="15" fill="#22d3ee" fill-opacity="0.11" stroke="#22d3ee" stroke-opacity="0.34"/>
+  <text x="320" y="562" text-anchor="middle" class="mono t1" font-size="13">Subgraph Out</text>
+  <rect x="385.6" y="542" width="92.4" height="30" rx="15" fill="#22d3ee" fill-opacity="0.11" stroke="#22d3ee" stroke-opacity="0.34"/>
+  <text x="431.8" y="562" text-anchor="middle" class="mono t1" font-size="13">Extension</text>
+  <rect x="830" y="92" width="740" height="146" rx="14" class="card"/>
+  <rect x="830" y="92" width="5" height="146" rx="2.5" fill="#facc15"/>
+  <text x="862" y="126" class="sans t1" font-size="19" font-weight="600">Flow</text>
+  <text x="862" y="149" class="sans t3" font-size="13.5">Loops, branching and execution order</text>
+  <rect x="1518" y="112" width="32" height="22" rx="11" fill="#facc15" fill-opacity="0.15"/>
+  <text x="1534" y="127" text-anchor="middle" class="mono" font-size="12.5" fill="#facc15">8</text>
+  <rect x="854" y="168" width="54.4" height="30" rx="15" fill="#facc15" fill-opacity="0.11" stroke="#facc15" stroke-opacity="0.34"/>
+  <text x="881.2" y="188" text-anchor="middle" class="mono t1" font-size="13">Wait</text>
+  <rect x="916.4" y="168" width="62" height="30" rx="15" fill="#facc15" fill-opacity="0.11" stroke="#facc15" stroke-opacity="0.34"/>
+  <text x="947.4" y="188" text-anchor="middle" class="mono t1" font-size="13">While</text>
+  <rect x="986.4" y="168" width="84.8" height="30" rx="15" fill="#facc15" fill-opacity="0.11" stroke="#facc15" stroke-opacity="0.34"/>
+  <text x="1028.8" y="188" text-anchor="middle" class="mono t1" font-size="13">For Each</text>
+  <rect x="1079.2" y="168" width="69.6" height="30" rx="15" fill="#facc15" fill-opacity="0.11" stroke="#facc15" stroke-opacity="0.34"/>
+  <text x="1114" y="188" text-anchor="middle" class="mono t1" font-size="13">Branch</text>
+  <rect x="1156.8" y="168" width="84.8" height="30" rx="15" fill="#facc15" fill-opacity="0.11" stroke="#facc15" stroke-opacity="0.34"/>
+  <text x="1199.2" y="188" text-anchor="middle" class="mono t1" font-size="13">Sequence</text>
+  <rect x="1249.6" y="168" width="69.6" height="30" rx="15" fill="#facc15" fill-opacity="0.11" stroke="#facc15" stroke-opacity="0.34"/>
+  <text x="1284.4" y="188" text-anchor="middle" class="mono t1" font-size="13">Select</text>
+  <rect x="1327.2" y="168" width="54.4" height="30" rx="15" fill="#facc15" fill-opacity="0.11" stroke="#facc15" stroke-opacity="0.34"/>
+  <text x="1354.4" y="188" text-anchor="middle" class="mono t1" font-size="13">Gate</text>
+  <rect x="1389.6" y="168" width="77.2" height="30" rx="15" fill="#facc15" fill-opacity="0.11" stroke="#facc15" stroke-opacity="0.34"/>
+  <text x="1428.2" y="188" text-anchor="middle" class="mono t1" font-size="13">Reroute</text>
+  <rect x="830" y="260" width="740" height="146" rx="14" class="card"/>
+  <rect x="830" y="260" width="5" height="146" rx="2.5" fill="#fbbf24"/>
+  <text x="862" y="294" class="sans t1" font-size="19" font-weight="600">Variables</text>
+  <text x="862" y="317" class="sans t3" font-size="13.5">Shared values across the graph</text>
+  <rect x="1518" y="280" width="32" height="22" rx="11" fill="#fbbf24" fill-opacity="0.15"/>
+  <text x="1534" y="295" text-anchor="middle" class="mono" font-size="12.5" fill="#fbbf24">5</text>
+  <rect x="854" y="336" width="84.8" height="30" rx="15" fill="#fbbf24" fill-opacity="0.11" stroke="#fbbf24" stroke-opacity="0.34"/>
+  <text x="896.4" y="356" text-anchor="middle" class="mono t1" font-size="13">Variable</text>
+  <rect x="946.8" y="336" width="115.2" height="30" rx="15" fill="#fbbf24" fill-opacity="0.11" stroke="#fbbf24" stroke-opacity="0.34"/>
+  <text x="1004.4" y="356" text-anchor="middle" class="mono t1" font-size="13">Get Variable</text>
+  <rect x="1070" y="336" width="115.2" height="30" rx="15" fill="#fbbf24" fill-opacity="0.11" stroke="#fbbf24" stroke-opacity="0.34"/>
+  <text x="1127.6" y="356" text-anchor="middle" class="mono t1" font-size="13">Set Variable</text>
+  <rect x="1193.2" y="336" width="107.6" height="30" rx="15" fill="#fbbf24" fill-opacity="0.11" stroke="#fbbf24" stroke-opacity="0.34"/>
+  <text x="1247" y="356" text-anchor="middle" class="mono t1" font-size="13">Make Struct</text>
+  <rect x="1308.8" y="336" width="115.2" height="30" rx="15" fill="#fbbf24" fill-opacity="0.11" stroke="#fbbf24" stroke-opacity="0.34"/>
+  <text x="1366.4" y="356" text-anchor="middle" class="mono t1" font-size="13">Break Struct</text>
+  <rect x="830" y="428" width="740" height="146" rx="14" class="card"/>
+  <rect x="830" y="428" width="5" height="146" rx="2.5" fill="#f97316"/>
+  <text x="862" y="462" class="sans t1" font-size="19" font-weight="600">Dispatchers</text>
+  <text x="862" y="485" class="sans t3" font-size="13.5">Fire and subscribe to named events</text>
+  <rect x="1518" y="448" width="32" height="22" rx="11" fill="#f97316" fill-opacity="0.15"/>
+  <text x="1534" y="463" text-anchor="middle" class="mono" font-size="12.5" fill="#f97316">2</text>
+  <rect x="854" y="504" width="138" height="30" rx="15" fill="#f97316" fill-opacity="0.11" stroke="#f97316" stroke-opacity="0.34"/>
+  <text x="923" y="524" text-anchor="middle" class="mono t1" font-size="13">Call Dispatcher</text>
+  <rect x="1000" y="504" width="138" height="30" rx="15" fill="#f97316" fill-opacity="0.11" stroke="#f97316" stroke-opacity="0.34"/>
+  <text x="1069" y="524" text-anchor="middle" class="mono t1" font-size="13">Bind Dispatcher</text>
+  <rect x="830" y="596" width="740" height="146" rx="14" class="card"/>
+  <rect x="830" y="596" width="5" height="146" rx="2.5" fill="#38bdf8"/>
+  <text x="862" y="630" class="sans t1" font-size="19" font-weight="600">Comment</text>
+  <text x="862" y="653" class="sans t3" font-size="13.5">Annotate the canvas</text>
+  <rect x="1518" y="616" width="32" height="22" rx="11" fill="#38bdf8" fill-opacity="0.15"/>
+  <text x="1534" y="631" text-anchor="middle" class="mono" font-size="12.5" fill="#38bdf8">1</text>
+  <rect x="854" y="672" width="77.2" height="30" rx="15" fill="#38bdf8" fill-opacity="0.11" stroke="#38bdf8" stroke-opacity="0.34"/>
+  <text x="892.6" y="692" text-anchor="middle" class="mono t1" font-size="13">Comment</text>
 </svg>

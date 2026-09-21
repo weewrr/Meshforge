@@ -120,13 +120,18 @@ class MultiviewGenerator(BaseGenerator):
     input_type = 'image'
     output_type = 'image'
     category = 'multiview'
+    # 生视图节点只暴露「采样步数 / 随机种子」两个可调项，且都以 pin_only 形式出现：
+    # 节点上不摆输入框（默认值足够日常使用），要改就从左侧引脚喂一个数值变量——
+    # 执行时 resolveParamPins 会把引脚上的文本按 int 协调为数字。
+    # 原先那条 vram_note（type='label'）已删除：它是说明文字而非参数，
+    # 摆在节点上只会变成一个"能打字但改了没用"的假输入框。
     params = [
         {'id': 'steps', 'label': '采样步数', 'type': 'int', 'default': 30, 'min': 5, 'max': 200,
-         'tooltip': '多视图扩散采样步数：越大越细腻但越慢'},
+         'pin_only': True,
+         'tooltip': '多视图扩散采样步数：越大越细腻但越慢；默认 30。可由引脚传入数值覆盖'},
         {'id': 'seed', 'label': '随机种子', 'type': 'int', 'default': -1, 'min': -1, 'max': 999_999_999,
-         'tooltip': '-1 = 每次随机；固定为正数可复现同一结果'},
-        {'id': 'vram_note', 'label': '显存', 'type': 'label',
-         'default': '生视图模型建议 6GB(RTX4050) 用低档参数；详见各模型 setup 脚本提示'},
+         'pin_only': True,
+         'tooltip': '-1 = 每次随机；固定为正数可复现同一结果。可由引脚传入数值覆盖'},
     ]
 
     def __init__(self, *, gen_id: str, name: str, port: int, env_prefix: str,

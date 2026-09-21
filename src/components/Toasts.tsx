@@ -6,6 +6,7 @@
  */
 
 import { dismiss, useToasts, type ToastKind } from '../stores/toasts'
+import { useT } from '../i18n'
 
 const KIND_ICON: Record<ToastKind, React.ReactNode> = {
   success: (
@@ -39,24 +40,25 @@ const KIND_ICON: Record<ToastKind, React.ReactNode> = {
 
 export function Toasts() {
   const toasts = useToasts()
+  const t = useT()
   if (toasts.length === 0) return null
 
   return (
     <div className="t-stack" role="status" aria-live="polite">
-      {toasts.map((t) => (
-        <div key={t.id} className={`t-toast t-toast--${t.kind}`} role="alert">
-          <span className="t-toast__icon">{KIND_ICON[t.kind]}</span>
-          <span className="t-toast__msg">{t.message}</span>
-          {t.action && (
-            <button className="t-toast__action" onClick={t.action.onClick}>
-              {t.action.label}
+      {toasts.map((toast) => (
+        <div key={toast.id} className={`t-toast t-toast--${toast.kind}`} role="alert">
+          <span className="t-toast__icon">{KIND_ICON[toast.kind]}</span>
+          <span className="t-toast__msg">{toast.message}</span>
+          {toast.action && (
+            <button className="t-toast__action" onClick={toast.action.onClick}>
+              {toast.action.label}
             </button>
           )}
           <button
             className="t-toast__close"
-            aria-label="关闭"
-            title="关闭"
-            onClick={() => dismiss(t.id)}
+            aria-label={t('common.close')}
+            title={t('common.close')}
+            onClick={() => dismiss(toast.id)}
           >
             <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="6" y1="6" x2="18" y2="18" />

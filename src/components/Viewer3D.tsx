@@ -14,6 +14,7 @@ import type { Group, Mesh } from 'three'
 import { useAppStore } from '../stores/app'
 import { useLogsStore } from '../stores/logs'
 import { useSceneStore, type LightSettings, type ViewMode } from '../stores/scene'
+import { useT } from '../i18n'
 
 // ─── Matcap / UV checker textures (generated once) ─────────────────────────
 
@@ -462,6 +463,7 @@ const VIEW_MODES: { mode: ViewMode; label: string; icon: React.ReactNode }[] = [
 
 /** 浮动工具栏：切换视图模式、开关自动旋转、触发截图下载。 */
 function ViewerToolbar({ onScreenshot }: { onScreenshot: () => string | null }) {
+  const t = useT()
   const viewMode = useSceneStore((s) => s.viewMode)
   const setViewMode = useSceneStore((s) => s.setViewMode)
   const autoRotate = useSceneStore((s) => s.autoRotate)
@@ -491,8 +493,8 @@ function ViewerToolbar({ onScreenshot }: { onScreenshot: () => string | null }) 
       ))}
       <div className="gp-vt__sep" />
       <button
-        title="Auto-rotate"
-        aria-label="Auto-rotate"
+        title={t('common.autoRotate')}
+        aria-label={t('common.autoRotate')}
         className={`gp-vt__btn ${autoRotate ? 'gp-vt__btn--active' : ''}`}
         onClick={toggleAutoRotate}
       >
@@ -501,7 +503,12 @@ function ViewerToolbar({ onScreenshot }: { onScreenshot: () => string | null }) 
           <path d="M3 3v5h5" />
         </svg>
       </button>
-      <button title="Screenshot" aria-label="Screenshot" className="gp-vt__btn" onClick={handleScreenshot}>
+      <button
+        title={t('common.screenshot')}
+        aria-label={t('common.screenshot')}
+        className="gp-vt__btn"
+        onClick={handleScreenshot}
+      >
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
           <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" />
           <circle cx="12" cy="13" r="3" />

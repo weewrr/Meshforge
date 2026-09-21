@@ -22,6 +22,7 @@ import {
   type WFEdge,
   type WFNode
 } from '../../types'
+import { getT } from '../../i18n'
 import { boundingBox } from './canvasUtils'
 
 export interface CollapseResult {
@@ -73,7 +74,7 @@ export function collapseToSubgraph(
     return {
       nodes: allNodes,
       edges: allEdges,
-      warnings: ['仅支持折叠顶层数据节点（排除容器/注释框及其内部节点、流程控制与函数挂点）']
+      warnings: [getT('workflows.toast.foldBlockedDetail')]
     }
   }
 

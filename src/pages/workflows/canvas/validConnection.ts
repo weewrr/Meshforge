@@ -8,6 +8,7 @@ import {
   isExecOut,
   isParamHandle,
   nodePorts,
+  paramPortType,
   portCompatible,
   type WFEdge,
   type WFNode
@@ -35,9 +36,10 @@ export function makeIsValidConnection(nodes: WFNode[], edges: WFEdge[]): IsValid
     }
 
     const sourceOut = nodePorts(source.type, source.data?.extensionId).output
-    // 参数引脚：统一按 text 校验（从任何 text/any 输出接入）；普通数据引脚按原端口类型。
+    // 参数引脚按该参数在 schema 里的类型校验（`type: 'image'` 的参数接图片，
+    // 其余参数接文本）；普通数据引脚按原端口类型。
     const targetIn = isParamHandle(connection.targetHandle)
-      ? 'text'
+      ? paramPortType(target, connection.targetHandle)
       : nodePorts(target.type, target.data?.extensionId).inputs[0]
     if (targetIn === undefined) return false
     if (!portCompatible(sourceOut, targetIn)) return false

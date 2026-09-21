@@ -139,8 +139,21 @@ class Hunyuan3DMVGenerator(BaseGenerator):
     display_name = 'Hunyuan3D 2 MV (4视图, Real)'
     input_type = 'image'   # channel 2 currently takes 4 files (front/left/back/right)
     output_type = 'mesh'
+    # 数字参数以 pin_only 形式出现（同 hunyuan.py 的说明）：节点上不摆输入框，改值走引脚。
+    #
+    # 四视角（`view_front`/`view_left`/`view_back`/`view_right`）是 `type: 'image'` 参数：
+    # 节点上各留一行「视角名 + 接一张图片」的说明，左侧一个天蓝色的**图片引脚**，
+    # 把图片节点的输出接上去即可 —— 执行期由 `stores/workflowRun/helpers.ts::mvViewsFrom()`
+    # 逐引脚读回 `File`，再随 multipart 的 front/left/back/right 字段提交。
+    #
+    # 上一版这里是 4 个 int（`view_<tag>_index` =「取上游数组的第几张」）。它既解决不了
+    # 问题、又误导用户：参数引脚的端口类型固定是 text，图片根本接不进去（用户反馈
+    # 「4 个都不能手动接入 image」），而真正要给的本来就是图片、不是序号。
+    # 现在改为图片引脚；不接引脚时仍兼容旧路径 —— 上游接数组节点则按顺序取第 1~4 张，
+    # 上游接自带四视图的图片节点则照旧（见 mvViewsFrom 的分层回退）。
     params = [
         {'id': 'steps', 'label': '采样步数', 'type': 'int', 'default': 20, 'min': 5, 'max': 100,
+         'pin_only': True,
          'tooltip': 'turbo 版建议 8~20'},
         {'id': 'octree', 'label': '重建分辨率', 'type': 'select', 'default': 256,
          'options': [
@@ -149,18 +162,25 @@ class Hunyuan3DMVGenerator(BaseGenerator):
              {'value': 384, 'label': '最高 384（低显存有 OOM 风险）'},
          ],
          'tooltip': '体积重建分辨率：越高表面细节越丰富，显存与耗时随之增加'},
-        {'id': 'seed', 'label': '随机种子', 'type': 'int', 'default': -1, 'min': -1, 'max': 999_999_999},
+        {'id': 'seed', 'label': '随机种子', 'type': 'int', 'default': -1, 'min': -1, 'max': 999_999_999,
+         'pin_only': True,
+         'tooltip': '-1 = 每次随机；固定为某个正数可复现同一结果'},
         {'id': 'remove_base', 'label': '去底部圆盘', 'type': 'select', 'default': 1,
          'options': [
              {'value': 1, 'label': '开启（推荐）'},
              {'value': 0, 'label': '关闭（保留底座）'},
          ]},
-        # 四视角外部映射：指明上游数组节点的哪一项充当各视角（默认顺序 0/1/2/3）。
-        # 数组内恰好按 front/left/back/right 顺序放 4 张图时无需改动；顺序不同才需调整。
-        {'id': 'view_front_index', 'label': 'Front 视角=第几张', 'type': 'int', 'default': 0, 'min': 0},
-        {'id': 'view_left_index', 'label': 'Left 视角=第几张', 'type': 'int', 'default': 1, 'min': 0},
-        {'id': 'view_back_index', 'label': 'Back 视角=第几张', 'type': 'int', 'default': 2, 'min': 0},
-        {'id': 'view_right_index', 'label': 'Right 视角=第几张', 'type': 'int', 'default': 3, 'min': 0},
+        # 四视角输入：每个视角一个图片引脚（`type: 'image'` 即"只给引脚、不摆输入框"）。
+        # default 是空串而非路径 —— 真正的文件路径由后端
+        # `routers/generate.py::generate_from_image()` 收到上传后写回同名 params 键。
+        {'id': 'view_front', 'label': 'Front 视角', 'type': 'image', 'default': '',
+         'tooltip': '正视图：接一张图片；不接则按上游顺序取第 1 张'},
+        {'id': 'view_left', 'label': 'Left 视角', 'type': 'image', 'default': '',
+         'tooltip': '左视图：接一张图片；不接则按上游顺序取第 2 张'},
+        {'id': 'view_back', 'label': 'Back 视角', 'type': 'image', 'default': '',
+         'tooltip': '背视图：接一张图片；不接则按上游顺序取第 3 张'},
+        {'id': 'view_right', 'label': 'Right 视角', 'type': 'image', 'default': '',
+         'tooltip': '右视图：接一张图片；不接则按上游顺序取第 4 张'},
     ]
 
     def __init__(

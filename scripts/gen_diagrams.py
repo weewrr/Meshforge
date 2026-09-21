@@ -18,23 +18,37 @@ OUT_DIR = os.path.normpath(
 SANS = "'Segoe UI','Helvetica Neue',Inter,Arial,sans-serif"
 MONO = "'JetBrains Mono','SF Mono',Consolas,Menlo,monospace"
 
-# 节点规格，与 src/types.ts 的 NODE_SPECS 保持一致（改一处须同步另一处）。
-# 每项：显示名 · 主题色 · 输入端口类型 · 输出端口类型 · 副标题
-NODES = [
-    ("Image",         "#38bdf8", [],       "image", "Pick the source photo"),
-    ("Text",          "#fbbf24", [],       "text",  "Prompt or extra parameters"),
-    ("Load 3D Mesh",  "#a78bfa", [],       "mesh",  "Import an existing mesh"),
-    ("Generate Mesh", "#34d399", ["image"], "mesh",  "Run the generator model"),
-    ("Preview",       "#38bdf8", ["mesh"], "mesh",  "Inspect in the 3D viewport"),
-    ("Add to Scene",  "#a78bfa", ["mesh"], "none",  "Hand the result to the scene"),
-    ("Wait",          "#71717a", ["any"],  "any",   "Pause between steps"),
-    ("While",         "#f59e0b", ["any"],  "any",   "Loop while a condition holds"),
-    ("For Each",      "#38bdf8", ["any"],  "any",   "Iterate over a list"),
-]
-
 # 端口类型 → 配色。`any` / `none` 用中性灰，避免与具体类型抢视觉重心。
 PORT_COLOR = {"image": "#38bdf8", "text": "#fbbf24", "mesh": "#a78bfa", "any": "#8b93a7",
               "none": "#8b93a7"}
+
+# 节点面板的七个分组，按语义划分（覆盖 src/types.ts 的 NODE_SPECS 全部 35 项，
+# 外加子图编辑器的 2 个内部节点 Subgraph In/Out，合计 37）。改动节点时须同步这里。
+# 每项：(中文组名, 英文组名, 主题色, 该组节点标签列表, 一句话说明)
+NODE_GROUPS = [
+    ("输入 / 输出", "I/O", "#38bdf8",
+     ["Image", "Text", "Load 3D Mesh", "Array", "Generate Mesh", "Preview", "Add to Scene"],
+     "Source media in, results out"),
+    ("控制流", "Flow", "#facc15",
+     ["Wait", "While", "For Each", "Branch", "Sequence", "Select", "Gate", "Reroute"],
+     "Loops, branching and execution order"),
+    ("逻辑与运算", "Compute", "#60a5fa",
+     ["Is Valid", "Is Empty", "Bool", "Math", "Compare", "Concat Text",
+      "Cast", "Clamp", "Lerp", "Random"],
+     "Blueprints-style pure data nodes"),
+    ("变量", "Variables", "#fbbf24",
+     ["Variable", "Get Variable", "Set Variable", "Make Struct", "Break Struct"],
+     "Shared values across the graph"),
+    ("事件分发", "Dispatchers", "#f97316",
+     ["Call Dispatcher", "Bind Dispatcher"],
+     "Fire and subscribe to named events"),
+    ("子图与扩展", "Subgraph / Extension", "#22d3ee",
+     ["Function", "Subgraph In", "Subgraph Out", "Extension"],
+     "Fold graphs, plug in models"),
+    ("注释", "Comment", "#38bdf8",
+     ["Comment"],
+     "Annotate the canvas"),
+]
 
 # 主题样式：默认浅色，prefers-color-scheme: dark 时切换为深色；
 # 字体名用 __SANS__ / __MONO__ 占位符，在字符串末尾统一替换（见下方 .replace）。
@@ -126,71 +140,105 @@ def tag(x, y, text, size=12, color="t2"):
 # --------------------------------------------------------------------------- #
 
 def node_palette():
-    """插图 1：九种内置节点类型及其端口类型。"""
-    cw, ch, gap = 440, 118, 20
-    cols, rows = 3, 3
-    x0, y0 = 40, 40
-    # 画布尺寸由 3×3 网格 + 四周/项间留白推得，改行列数时尺寸自动跟随。
-    w = x0 * 2 + cw * cols + gap * (cols - 1)
-    h = y0 * 2 + ch * rows + gap * (rows - 1)
+    """插图 1：七个节点分组及其包含的节点。
 
-    out = []
-    for i, (label, color, inputs, output, hint) in enumerate(NODES):
-        # 按行优先顺序摆位：i % cols 定列、i // cols 定行。
-        cx = x0 + (i % cols) * (cw + gap)
-        cy = y0 + (i // cols) * (ch + gap)
+    不再逐个罗列节点卡片（37 种会让插图过于庞大），改为按分组概览：
+    每组一张卡列出该组全部节点名，读者一眼看清体系结构，细节查 README 表格。
+    """
+    cw = 740          # 卡宽
+    gap_col = 60      # 列间距
+    gap_row = 22      # 行间距
+    x0, y0 = 30, 92   # 左右边距 / 顶部留白（给标题）
+    pill_h = 30       # 节点药丸高
+    pill_gap = 8      # 药丸间距
+    pad = 24          # 卡内左右内边距
+    head = 76         # 卡内标题区高度
 
-        out.append(
-            f'  <rect x="{f(cx)}" y="{f(cy)}" width="{cw}" height="{ch}" rx="12" class="card"/>'
-        )
-        # 颜色样本方块 + 节点名称
-        out.append(f'  <rect x="{f(cx + 20)}" y="{f(cy + 24)}" width="12" height="12" rx="3" fill="{color}"/>')
-        out.append(
-            f'  <text x="{f(cx + 44)}" y="{f(cy + 36)}" class="sans t1" font-size="19" font-weight="600">{esc(label)}</text>'
-        )
-        out.append(f'  <text x="{f(cx + 20)}" y="{f(cy + 62)}" class="sans t3" font-size="14">{esc(hint)}</text>')
+    # 先把每组算成「卡高 + 药丸明细」，再贪心分到左右两列，让两列高度尽量接近。
+    def layout_group(name_cn, name_en, color, nodes, hint):
+        """算出单组的卡高与每个药丸的 (text, x, y) 偏移，返回 (卡高, 药丸列表)。"""
+        avail = cw - pad * 2
+        rows, cur_x, cur = [], 0.0, []
+        for n in nodes:
+            # 药丸宽度：等宽字约 7.6px/字符，再留 24px 内边距。
+            w = len(n) * 7.6 + 24
+            if cur and cur_x + w > avail:
+                rows.append(cur)
+                cur, cur_x = [], 0.0
+            cur.append((n, cur_x, w))
+            cur_x += w + pill_gap
+        if cur:
+            rows.append(cur)
+        pills = []
+        for r, row in enumerate(rows):
+            for text, px, _w in row:
+                pills.append((text, px, r * (pill_h + pill_gap)))
+        return head + len(rows) * (pill_h + pill_gap) + pad - pill_gap + 16, pills
 
-        # 输入端口药丸
-        px = cx + 20
-        py = cy + 78
-        if inputs:
-            for p in inputs:
-                pc = PORT_COLOR[p]
-                # 药丸宽度随文字长度自适应：每字符约 8px，再留 22px 内边距。
-                pw = len(p) * 8 + 22
-                out.append(
-                    f'  <rect x="{f(px)}" y="{f(py)}" width="{pw}" height="24" rx="12" fill="none" '
-                    f'stroke="{pc}" stroke-opacity="0.45"/>'
-                )
-                out.append(
-                    f'  <text x="{f(px + pw / 2)}" y="{f(py + 16)}" text-anchor="middle" class="mono" '
-                    f'font-size="11.5" fill="{pc}">{esc(p)}</text>'
-                )
-                px += pw + 8
-            # 输入与输出之间画箭头（仅当两边都有端口时）
-            if output and output != "none":
-                out.append(
-                    f'  <path d="M{f(px + 2)} {f(py + 12)}h14" class="ln a" marker-end="url(#arw)"/>'
-                )
-                px += 26
-        if output and output != "none":
-            pc = PORT_COLOR[output]
-            pw = len(output) * 8 + 22
-            # 输出端口用实心底 + 更低透明度，与输入的描边样式区分开。
+    cards = [layout_group(*g) for g in NODE_GROUPS]
+
+    # 贪心装箱：依次塞进当前较矮的那一列（首组分给左列）。
+    cols = [[], []]
+    heights = [0.0, 0.0]
+    for i, g in enumerate(NODE_GROUPS):
+        card_h = cards[i][0]
+        c = 0 if heights[0] <= heights[1] else 1
+        cols[c].append((i, g, cards[i], heights[c]))
+        heights[c] += card_h + gap_row
+
+    col_h = max(heights) - gap_row
+    h = y0 + col_h + 34
+
+    out = [
+        f'  <text x="30" y="42" class="sans t1" font-size="25" font-weight="600">'
+        f'Thirty-seven node types, seven groups</text>',
+        f'  <text x="30" y="70" class="sans t3" font-size="15.5">'
+        f'Every node declares typed ports — the canvas only accepts edges whose port types match.</text>',
+    ]
+
+    for ci, column in enumerate(cols):
+        cx = x0 + ci * (cw + gap_col)
+        for idx, (gi, g, (card_h, pills), cy_off) in enumerate(column):
+            name_cn, name_en, color, nodes, hint = g
+            cy = y0 + cy_off
+            out.append(f'  <rect x="{f(cx)}" y="{f(cy)}" width="{cw}" height="{f(card_h)}" rx="14" class="card"/>')
+            # 左侧竖向强调条：比整块着色克制，又能按组区分。
+            out.append(f'  <rect x="{f(cx)}" y="{f(cy)}" width="5" height="{f(card_h)}" rx="2.5" fill="{color}"/>')
             out.append(
-                f'  <rect x="{f(px)}" y="{f(py)}" width="{pw}" height="24" rx="12" fill="{pc}" fill-opacity="0.14" '
-                f'stroke="{pc}" stroke-opacity="0.55"/>'
+                f'  <text x="{f(cx + pad + 8)}" y="{f(cy + 34)}" class="sans t1" font-size="19" '
+                f'font-weight="600">{esc(name_en)}</text>'
             )
             out.append(
-                f'  <text x="{f(px + pw / 2)}" y="{f(py + 16)}" text-anchor="middle" class="mono" '
-                f'font-size="11.5" fill="{pc}">{esc(output)}</text>'
+                f'  <text x="{f(cx + pad + 8)}" y="{f(cy + 57)}" class="sans t3" font-size="13.5">'
+                f'{esc(hint)}</text>'
             )
+            # 右上角计数徽标
+            out.append(
+                f'  <rect x="{f(cx + cw - 52)}" y="{f(cy + 20)}" width="32" height="22" rx="11" '
+                f'fill="{color}" fill-opacity="0.15"/>'
+            )
+            out.append(
+                f'  <text x="{f(cx + cw - 36)}" y="{f(cy + 35)}" text-anchor="middle" class="mono" '
+                f'font-size="12.5" fill="{color}">{len(nodes)}</text>'
+            )
+            for text, px, py in pills:
+                w = len(text) * 7.6 + 24
+                x = cx + pad + px
+                y = cy + head + py
+                out.append(
+                    f'  <rect x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{pill_h}" rx="15" '
+                    f'fill="{color}" fill-opacity="0.11" stroke="{color}" stroke-opacity="0.34"/>'
+                )
+                out.append(
+                    f'  <text x="{f(x + w / 2)}" y="{f(y + 20)}" text-anchor="middle" class="mono t1" '
+                    f'font-size="13">{esc(text)}</text>'
+                )
 
     return wrap(
         "MeshForge node types",
-        "The nine built-in node types with their port types: Image, Text, Load 3D Mesh, "
-        "Generate Mesh, Preview, Add to Scene, Wait, While and For Each.",
-        w, h, "\n".join(out),
+        "Thirty-seven built-in node types in seven groups: I/O, flow control, compute, variables, "
+        "event dispatchers, subgraph/extension and comment.",
+        x0 * 2 + cw * 2 + gap_col, h, "\n".join(out),
     )
 
 
@@ -326,7 +374,7 @@ def runtime():
             ("Node canvas", "React Flow graph editor"),
             ("3D viewer", "Three.js + grid floor"),
         ]),
-        (1160, "Python · FastAPI :8766", "#34d399", [
+        (1160, "Python · FastAPI :8766+", "#34d399", [
             ("Routers", "workflows / generate / process"),
             ("Generator registry", "built-ins + installed extensions"),
             ("Workspace", "workflows/ · extensions/ · models/"),
@@ -384,8 +432,8 @@ def runtime():
 
     return wrap(
         "MeshForge runtime architecture",
-        "Electron main process spawns and watches a local Python FastAPI backend on port 8766; "
-        "the React renderer talks to it over HTTP, SSE and IPC.",
+        "Electron main process spawns and watches a local Python FastAPI backend (port 8766 or the "
+        "next free one); the React renderer talks to it over HTTP, SSE and IPC.",
         w, h, "\n".join(out),
     )
 
@@ -487,14 +535,127 @@ def extensions():
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────── #
+# 5. 生成器分类
+# ─────────────────────────────────────────────────────────────────────────── #
+
+# 四大分类，与 server/generators/registry.py 的 `category` 字段和
+# src/types.ts 的 EXTENSION_CATEGORY_COLOR 一致（改一处须同步另两处）。
+# 每项：(分类键, 显示名, 主题色, 输入 → 输出, 说明, 具体模型列表)
+GENERATOR_CATEGORIES = [
+    ("mesh", "mesh", "#34d399", "image → mesh",
+     "Image to a textured 3D mesh — the core of MeshForge.",
+     ["Hunyuan3D 2 mini", "Hunyuan3D 2 turbo", "Hunyuan3D 2 50-step",
+      "Hunyuan3D 2 MV turbo", "Hunyuan3D 2 MV fast", "Hunyuan3D 2 MV 50-step",
+      "InstantMesh large", "InstantMesh base"]),
+    ("multiview", "multiview", "#2dd4bf", "image / text → PNG sheet",
+     "One image (or a prompt) to a multi-view contact sheet.",
+     ["MVDream (text)", "Stable Zero123", "Wonder3D Plus"]),
+    ("image", "image", "#e879f9", "image → image",
+     "Image-to-image utilities: matting, upscaling, depth, line art.",
+     ["RMBG-2.0", "BiRefNet", "Real-ESRGAN x2", "Depth-Anything-V2",
+      "MoGe", "M-LSD", "CodeFormer", "Universal Matting"]),
+    ("process", "process", "#34d399", "mesh → mesh",
+     "CPU mesh cleanup and conversion, powered by trimesh + numpy.",
+     ["mesh-repair", "mesh-smoother", "mesh-remesher", "mesh-optimizer",
+      "mesh-exporter"]),
+]
+
+
+def generator_categories():
+    """插图 5：四大生成器分类及其输出类型。"""
+    cw, gap = 372, 36
+    x0, y0 = 30, 112
+    n = len(GENERATOR_CATEGORIES)
+    w = x0 * 2 + cw * n + gap * (n - 1)
+    # 高度按模型最多的那一类推算（本文件里 image 类 8 项），避免硬编码后加模型就溢出。
+    list_top, row_h = 224, 24
+    h = y0 + list_top + max(len(c[5]) for c in GENERATOR_CATEGORIES) * row_h + 34
+    pad = 24
+
+    out = [
+        f'  <text x="30" y="42" class="sans t1" font-size="25" font-weight="600">'
+        f'Four generator categories</text>',
+        f'  <text x="30" y="70" class="sans t3" font-size="15.5">'
+        f'Each generator declares a category; the Models page groups by it and the palette colors '
+        f'nodes accordingly.</text>',
+    ]
+
+    for i, (key, name, color, flow, hint, models) in enumerate(GENERATOR_CATEGORIES):
+        cx = x0 + i * (cw + gap)
+        out.append(f'  <rect x="{f(cx)}" y="{f(y0)}" width="{cw}" height="{f(h - y0 - 34)}" rx="16" class="card"/>')
+        # 顶部彩色条：与工作流画布上该类节点的颜色一致。
+        out.append(f'  <rect x="{f(cx)}" y="{f(y0)}" width="{cw}" height="4" rx="2" fill="{color}"/>')
+
+        out.append(
+            f'  <text x="{f(cx + pad)}" y="{f(y0 + 42)}" class="sans t1" font-size="20" '
+            f'font-weight="600">{esc(name)}</text>'
+        )
+        out.append(
+            f'  <rect x="{f(cx + pad)}" y="{f(y0 + 56)}" width="{f(len(models) * 7.6 + 24)}" height="22" '
+            f'rx="11" fill="{color}" fill-opacity="0.14"/>'
+        )
+        out.append(
+            f'  <text x="{f(cx + pad + (len(models) * 7.6 + 24) / 2)}" y="{f(y0 + 71)}" '
+            f'text-anchor="middle" class="mono" font-size="11.5" fill="{color}">{len(models)} models</text>'
+        )
+
+        # 输入 → 输出 流程标签
+        out.append(
+            f'  <text x="{f(cx + pad)}" y="{f(y0 + 104)}" class="mono t2" font-size="13">'
+            f'{esc(flow)}</text>'
+        )
+        # 说明文字：卡宽有限，手工折行（每行约 42 个西文字符）。
+        for j, line in enumerate(_wrap_text(hint, 44)):
+            out.append(
+                f'  <text x="{f(cx + pad)}" y="{f(y0 + 130 + j * 19)}" class="sans t3" '
+                f'font-size="13.5">{esc(line)}</text>'
+            )
+
+        out.append(
+            f'  <line x1="{f(cx + pad)}" y1="{f(y0 + 196)}" x2="{f(cx + cw - pad)}" y2="{f(y0 + 196)}" '
+            f'class="lnd"/>'
+        )
+        yy = y0 + list_top
+        for m in models:
+            out.append(f'  <circle cx="{f(cx + pad + 4)}" cy="{f(yy - 4)}" r="3" fill="{color}"/>')
+            out.append(
+                f'  <text x="{f(cx + pad + 16)}" y="{f(yy)}" class="sans t2" font-size="13.5">'
+                f'{esc(m)}</text>'
+            )
+            yy += row_h
+
+    return wrap(
+        "MeshForge generator categories",
+        "Four generator categories: mesh (image to mesh), multiview (image to PNG contact sheet), "
+        "image (image to image utilities) and process (mesh to mesh cleanup).",
+        w, h, "\n".join(out),
+    )
+
+
+def _wrap_text(text, limit):
+    """按最大字符数折行，返回行列表（用于 SVG 里的说明文字）。"""
+    words, lines, cur = text.split(), [], ""
+    for wd in words:
+        if cur and len(cur) + 1 + len(wd) > limit:
+            lines.append(cur)
+            cur = wd
+        else:
+            cur = f"{cur} {wd}".strip()
+    if cur:
+        lines.append(cur)
+    return lines
+
+
 def main():
-    """入口：依次生成四张插图并写出到 OUT_DIR，打印每张的体积。"""
+    """入口：依次生成五张插图并写出到 OUT_DIR，打印每张的体积。"""
     os.makedirs(OUT_DIR, exist_ok=True)
     for name, fn in (
         ("node-palette.svg", node_palette),
         ("pipeline.svg", pipeline),
         ("runtime-architecture.svg", runtime),
         ("extension-sources.svg", extensions),
+        ("generator-categories.svg", generator_categories),
     ):
         path = os.path.join(OUT_DIR, name)
         with open(path, "w", encoding="utf-8") as fp:

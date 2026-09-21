@@ -12,30 +12,59 @@ files:
   - package.json
   - "!out/**/*.map"
 
-# Python 后端源码随包携带（供 python-bridge 在用户机器上拉起）
+# Python 后端源码 + 自包含运行时随包携带（供 python-bridge 在用户机器上拉起）
+#   - server/           后端源码
+#   - server/.runtime/  由 scripts/prepare_bundled_python.py 生成的 embeddable
+#                       Python + 后端依赖（含 modelscope 下载 CLI），使安装包
+#                       在未装 Python 的机器上也能直接运行。
+#   .venv 是开发机产物：pyvenv.cfg 绑定本机 miniconda 路径且不自带 python3xx.dll，
+#   换机器必然失效，因此始终排除。
 extraResources:
   - from: server
     to: server
     filter:
       - "**/*"
+      # dotfile 不被 "**/*" 匹配，需显式放行随包运行时
+      - ".runtime/**"
       - "!__pycache__/**"
       - "!**/__pycache__/**"
       - "!.venv/**"
       - "!workspace/**"
       - "!models/**"
-  - from: scripts
-    to: scripts
-    filter:
-      # 随包携带全部模型服务的 setup/start 脚本（文档 3.1 第 5 条：
-      # 此前只打包了 Hunyuan 的两个脚本，其余模型服务启动资源缺失）。
-      - "*.bat"
+  # 说明：scripts/ 下的模型服务 setup/start 脚本（*.bat）已从仓库移除
+  # （内含本机 venv 与绝对路径，机器绑定），因此不再随包携带。
+  # 后端启动方式见 README 部署章节。
 
 win:
   target:
     - target: nsis
       arch: [x64]
+    # 免安装版：解压即用，便于 A 卡/受限环境与 CI 冒烟测试
+    - target: zip
+      arch: [x64]
   # 无正式签名证书前跳过签名
   signAndEditExecutable: false
+
+mac:
+  # 定位是"消费级 GPU 本地推理"，主力平台是 Windows/Linux；
+  # 这里只给 x64/arm64 的 dmg + zip，供源码构建用户自行打包。
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  category: public.app-category.graphics-design
+  # 无签名证书：macOS 会要求用户右键打开
+  identity: null
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  category: Graphics
+  maintainer: weewrr
 
 nsis:
   oneClick: false

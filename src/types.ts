@@ -65,8 +65,19 @@ export interface GeneratorInfo {
 // Schema 驱动的扩展节点：要么是模型生成器（图→网格），要么是网格处理工具（网格→网格）。
 // 节点 UI 与执行引擎都从这份 schema 读 `params`，因此新增模型无需改前端组件。
 
-/** 参数控件类型；决定节点参数区渲染成下拉、文本框还是数字输入。 */
-export type ParamType = 'select' | 'string' | 'int' | 'float'
+/**
+ * 参数控件类型；决定节点参数区渲染成下拉、文本框还是数字输入。
+ *
+ * `label` 是**只读说明**：不产生输入控件、也不产生参数引脚，只在节点上渲染
+ * 一行静态文案（例如"显存建议"这类提示）。没有这个类型时，这类参数会掉进
+ * 默认文本输入分支，渲染成一个"能打字但改了没用"的假输入框。
+ *
+ * `image` 是**图片引脚**：同样不摆输入框（值不可能靠打字给出），但保留一个
+ * `image` 端口类型的参数引脚，让图片节点的输出能接进来。数字/文本参数引脚的
+ * 端口类型恒为 `text`，图片接不进去 —— 这就是"四视图映射"当初接不上图片的原因。
+ * 详见 `paramPortType()` 与 `stores/workflowRun/helpers.ts::mvViewsFrom()`。
+ */
+export type ParamType = 'select' | 'string' | 'int' | 'float' | 'label' | 'image'
 
 /** 单个参数的定义。 */
 export interface ParamSchema {
@@ -84,6 +95,14 @@ export interface ParamSchema {
   tooltip?: string
   /** 仅当另一个参数取值命中这里列举的值时，本参数才在表单中显示。 */
   show_if?: Record<string, string | number | Array<string | number>>
+  /**
+   * 只保留参数引脚与默认值，**不渲染内联输入控件**。
+   *
+   * 用于"默认值够用、偶尔才需要被上游驱动"的参数（如采样步数 / 随机种子）：
+   * 节点上不再摆一个天天碍眼的输入框，值改由引脚注入 —— 执行时
+   * `resolveParamPins` 会把引脚上的文本按 `type` 协调为数字。
+   */
+  pin_only?: boolean
 }
 
 /** 一个扩展（模型或网格处理工具）的完整定义。 */
@@ -97,6 +116,12 @@ export interface WorkflowExtension {
   /** 更细的分类，决定节点配色与面板分组（见 `EXTENSION_CATEGORY_COLOR`）。 */
   category?: 'mesh' | 'multiview' | 'image' | 'process'
   params: ParamSchema[]
+  /**
+   * 是否为**代码内置**扩展（随程序发布，磁盘上没有可删除的目录）。
+   * 内置项的"卸载"只是停用——写进后端的停用表，跨重启生效，且可随时恢复；
+   * 清单扩展（`extensions/<id>/`）的卸载才是真删目录。
+   */
+  builtin?: boolean
   /** 从该 HuggingFace 仓库下载模型权重（仅清单式扩展需要）。 */
   hfRepo?: string
   /** 下载权重时需要排除的路径前缀（例如示例图、文档）。 */
@@ -288,9 +313,38 @@ export function paramIdFromHandle(handle?: string | null): string | null {
   return null
 }
 
-/** 参数引脚统一使用的端口类型（数值型也在执行时从文本协调为数字）。 */
-export function paramPortType(): PortType {
-  return 'text'
+/**
+ * 单个参数在节点上的引脚端口类型：`type: 'image'` 的参数 → `image`，其余 → `text`。
+ *
+ * 节点组件手里只有 `ParamSchema`（没有节点 id），所以这个判据单独暴露一份；
+ * `paramPortType()`（按 node + handle 查 schema）内部也走它，保证连线校验、
+ * 连线着色与节点渲染三处永远同源。
+ */
+export function paramPortTypeOf(param?: ParamSchema): PortType {
+  return param?.type === 'image' ? 'image' : 'text'
+}
+
+/**
+ * 参数引脚的端口类型：由该参数在扩展 schema 里的 `type` 决定。
+ *
+ * - `type: 'image'` 的参数 → `image`（四视图那类"每个视角接一张图"的参数）；
+ * - 其余（int / float / string / select…）→ `text`：数值型也在执行时从文本
+ *   协调为数字（见 `resolveParamPins`）。
+ *
+ * 没有 schema（节点缺 `extensionId`、内置节点、扩展尚未加载）时一律退化为
+ * `text`，保持历史行为不变。
+ *
+ * @param node 参数引脚所属节点（用于查扩展 schema）
+ * @param handle 参数引脚 handle（`p:<paramId>`）；非参数引脚返回 `text`
+ */
+export function paramPortType(
+  node?: { data?: unknown },
+  handle?: string | null
+): PortType {
+  const pid = paramIdFromHandle(handle)
+  if (!pid) return 'text'
+  const ext = getExtensionById((node?.data as { extensionId?: unknown } | undefined)?.extensionId)
+  return paramPortTypeOf(ext?.params.find((p) => p.id === pid))
 }
 
 // ─── 执行引脚（Unreal Blueprint exec 引脚）────────────────────────────────────
@@ -511,10 +565,10 @@ export function unpackStruct(raw: string, fields: string[], index: number): stri
 }
 
 /** 目标节点上某个 handle 期望的数据类型（多输入节点按 handle 下标取对应输入类型）。 */
-export function targetInputType(node: { type?: string; data?: { extensionId?: unknown } }, handle?: string | null): PortType {
-  // 参数引脚统一为 text（连线着色与校验一致）。
-  if (isParamHandle(handle)) return paramPortType()
-  const inps = nodePorts(node?.type, node?.data?.extensionId).inputs
+export function targetInputType(node: { type?: string; data?: unknown }, handle?: string | null): PortType {
+  // 参数引脚按 schema 判定（`type: 'image'` 的参数接图片，其余接文本）。
+  if (isParamHandle(handle)) return paramPortType(node, handle)
+  const inps = nodePorts(node?.type, (node?.data as { extensionId?: unknown } | undefined)?.extensionId).inputs
   if (inps.length === 0) return 'none'
   // 下标越界时收敛到最后一个端口，避免接入多余连线时报错。
   const idx = Math.min(inputIndexForHandle(handle), inps.length - 1)

@@ -27,7 +27,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import API_TOKEN_FILE, DATA_DIR, MODELS_DIR, WORKSPACE_DIR, ensure_dirs
-from routers import agent, diagnostics, extensions, generate, library, model, process, settings, system_stats, workflows
+from routers import agent, diagnostics, extensions, generate, library, model, model_downloads, process, settings, system_stats, workflows
 from schemas import HealthOut, HealthStatusOut, ReadyOut
 
 ensure_dirs()
@@ -170,6 +170,7 @@ app.include_router(workflows.router)
 app.include_router(extensions.router)
 app.include_router(process.router)
 app.include_router(model.router)
+app.include_router(model_downloads.router)
 app.include_router(library.router)
 app.include_router(system_stats.router)
 app.include_router(settings.router)

@@ -36,9 +36,11 @@ export function useUninstall(
         setUninstallError(result.message)
         return
       }
-      log('info', getT('models.logUninstall', { msg: result.message }))
+      log('info', getT(result.builtin ? 'models.logDisabled' : 'models.logUninstall', { msg: result.message }))
       setUninstallTarget(null)
-      toast.success(getT('models.toast.uninstalled'), { duration: 2000 })
+      // 内置扩展只是停用（后端记进停用表，跨重启生效），文案不能再说"已卸载"，
+      // 否则用户会以为磁盘上少了东西、又疑惑为什么能恢复。
+      toast.success(getT(result.builtin ? 'models.toast.disabled' : 'models.toast.uninstalled'), { duration: 3000 })
       await refresh()
     } catch (e) {
       setUninstallError(e instanceof Error ? e.message : String(e))

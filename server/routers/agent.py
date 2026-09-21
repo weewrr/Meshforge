@@ -450,6 +450,149 @@ def _build_workflow_graph(name: str, description: str, input_type: str, steps: l
 
 # ─── 工具执行 ────────────────────────────────────────────────────────────────
 
+# 工具名 → 处理函数。全部处理器签名为 (arguments, context) -> (结果文本, action payload | None)。
+# 拆分为按领域分组的具名函数，是为了让 hf/agent 的单函数保持可读、可单测；
+# 分派语义与原 if/elif 链完全一致（阶段一抽取，行为零变更）。
+
+
+def _tool_list_models(arguments: dict, context: dict) -> tuple[str, dict | None]:
+    """列出已下载可用的模型（未装权重的不列，避免模型推荐不存在的模型）。"""
+    models = _request_json('GET', f'{API_BASE}/generators') or []
+    loaded = [m for m in models if m.get('is_loaded')]
+    if not loaded:
+        return 'No models downloaded yet.', None
+    lines = '\n'.join(f"- {m['id']}: {m.get('display_name', m['id'])}" for m in loaded)
+    return f'Available models:\n{lines}', None
+
+
+def _tool_unload_models(arguments: dict, context: dict) -> tuple[str, dict | None]:
+    """卸载全部生成模型。
+
+    Meshforge 的注册表还没有服务端"全部卸载"接口；生成器是惰性卸载的。
+    这里直接报成功，以免打断工具循环。
+    """
+    return 'All 3D generation models have been unloaded from VRAM.', None
+
+
+def _tool_get_mesh_info(arguments: dict, context: dict) -> tuple[str, dict | None]:
+    """报告当前查看器里网格的路径与三角面数。"""
+    mesh_path = context.get('currentMeshPath')
+    mesh_triangles = context.get('meshTriangles')
+    if not mesh_path:
+        return 'No mesh currently loaded in the viewer.', None
+    info = f'Current mesh: {_mesh_relative(mesh_path)}'
+    if mesh_triangles:
+        # 千分位分隔，方便模型/用户读大数字。
+        info += f' ({mesh_triangles:,} triangles)'
+    return info, None
+
+
+def _tool_decimate_mesh(arguments: dict, context: dict) -> tuple[str, dict | None]:
+    """对网格执行 QEM 减面，返回新的网格 URL。"""
+    path = _mesh_relative(str(arguments.get('path', '')))
+    result = _run_mesh_tool('mesh-remesher', path, {
+        'target_faces': int(arguments.get('target_faces', 10000)),
+    })
+    payload = {'type': 'mesh_update', 'url': result['url'], 'face_count': result.get('face_count')}
+    return f"Decimated to {result.get('face_count') or '?'} faces.", payload
+
+
+def _tool_smooth_mesh(arguments: dict, context: dict) -> tuple[str, dict | None]:
+    """对网格执行平滑，返回新的网格 URL。"""
+    path = _mesh_relative(str(arguments.get('path', '')))
+    result = _run_mesh_tool('mesh-smoother', path, {
+        'iterations': int(arguments.get('iterations', 3)),
+    })
+    payload = {'type': 'mesh_update', 'url': result['url']}
+    # 文案沿用原实现的 arguments 取值（可能为 None），保持对外行为不变。
+    return f"Smoothed mesh ({arguments.get('iterations')} iterations).", payload
+
+
+def _tool_get_generation_status(arguments: dict, context: dict) -> tuple[str, dict | None]:
+    """查询某个生成任务的进度与结果。"""
+    status = _request_json('GET', f"{API_BASE}/generate/jobs/{arguments.get('job_id', '')}")
+    if not status:
+        return 'Job not found.', None
+    text = f"Status: {status.get('state')}, Progress: {status.get('progress', 0) * 100:.0f}%"
+    if status.get('result_url'):
+        text += f", Output: {status['result_url']}"
+    if status.get('error'):
+        text += f", Error: {status['error']}"
+    return text, None
+
+
+def _tool_list_workflows(arguments: dict, context: dict) -> tuple[str, dict | None]:
+    """列出前端上下文里的工作流。"""
+    workflows = context.get('workflows', [])
+    if not workflows:
+        return 'No workflows found. Create one in the Workflows tab.', None
+    lines = '\n'.join(f"- {w['id']}: {w['name']}" for w in workflows)
+    return f'Available workflows:\n{lines}', None
+
+
+def _tool_run_workflow(arguments: dict, context: dict) -> tuple[str, dict | None]:
+    """校验工作流 id 后请求前端运行它。"""
+    workflow_id = arguments.get('workflow_id', '')
+    workflows = context.get('workflows', [])
+    # 先在前端给的列表里校验 id：不存在就提示模型改用 list_workflows，
+    # 而不是把一个注定失败的运行请求发出去。
+    match = next((w for w in workflows if w['id'] == workflow_id), None)
+    if not match:
+        return f"Workflow '{workflow_id}' not found. Use list_workflows to see available workflows.", None
+    payload = {'type': 'run_workflow', 'workflow_id': workflow_id, 'workflow_name': match['name']}
+    return f"Executing workflow '{match['name']}'…", payload
+
+
+def _tool_create_workflow(arguments: dict, context: dict) -> tuple[str, dict | None]:
+    """按模型给出的步骤构建工作流图，并回传给前端创建。"""
+    steps = arguments.get('steps') or []
+    if not steps:
+        return 'A workflow needs at least one step. Specify the extensions to chain.', None
+
+    input_type = arguments.get('input_type') or 'image'
+    if input_type not in INPUT_NODES:
+        return (
+            f"Invalid input_type '{input_type}'. Use exactly one of: "
+            'image (Image node), text (Text node), mesh (Load 3D Mesh node).',
+            None,
+        )
+
+    extensions = context.get('extensions', [])
+    valid_ids = {e['id'] for e in extensions}
+    if valid_ids:
+        # 防幻觉：模型很容易编造扩展 id，这里逐个校验并回传可用清单。
+        unknown = [s.get('extension_id') for s in steps if s.get('extension_id') not in valid_ids]
+        if unknown:
+            avail = ', '.join(sorted(valid_ids)) or '(none installed)'
+            return (
+                f"Unknown extension id(s): {', '.join(map(str, unknown))}. "
+                f'Use only these: {avail}.',
+                None,
+            )
+
+    wf = _build_workflow_graph(
+        name=arguments.get('name') or 'New Workflow',
+        description=arguments.get('description') or '',
+        input_type=input_type,
+        steps=steps,
+    )
+    payload = {'type': 'create_workflow', 'workflow': wf}
+    return f"Created workflow '{wf['name']}' with {len(steps)} step(s).", payload
+
+
+TOOL_HANDLERS: dict[str, callable] = {
+    'list_models': _tool_list_models,
+    'unload_models': _tool_unload_models,
+    'get_mesh_info': _tool_get_mesh_info,
+    'decimate_mesh': _tool_decimate_mesh,
+    'smooth_mesh': _tool_smooth_mesh,
+    'get_generation_status': _tool_get_generation_status,
+    'list_workflows': _tool_list_workflows,
+    'run_workflow': _tool_run_workflow,
+    'create_workflow': _tool_create_workflow,
+}
+
+
 def _execute_tool(name: str, arguments: dict, context: dict) -> tuple[str, dict | None]:
     """执行一个工具，返回 (结果文本, action payload)。
 
@@ -464,114 +607,11 @@ def _execute_tool(name: str, arguments: dict, context: dict) -> tuple[str, dict 
     Returns:
         `(result_text, payload)`；result_text 会被回填进对话供模型继续推理。
     """
+    handler = TOOL_HANDLERS.get(name)
     try:
-        if name == 'list_models':
-            models = _request_json('GET', f'{API_BASE}/generators') or []
-            # 只列"已下载可用"的模型，避免模型推荐一堆没装的权重。
-            loaded = [m for m in models if m.get('is_loaded')]
-            if not loaded:
-                return 'No models downloaded yet.', None
-            lines = '\n'.join(f"- {m['id']}: {m.get('display_name', m['id'])}" for m in loaded)
-            return f'Available models:\n{lines}', None
-
-        elif name == 'unload_models':
-            # Meshforge 的注册表还没有服务端"全部卸载"接口；
-            # 生成器是惰性卸载的。这里直接报成功，以免打断工具循环。
-            return 'All 3D generation models have been unloaded from VRAM.', None
-
-        elif name == 'get_mesh_info':
-            mesh_path = context.get('currentMeshPath')
-            mesh_triangles = context.get('meshTriangles')
-            if not mesh_path:
-                return 'No mesh currently loaded in the viewer.', None
-            info = f'Current mesh: {_mesh_relative(mesh_path)}'
-            if mesh_triangles:
-                # 千分位分隔，方便模型/用户读大数字。
-                info += f' ({mesh_triangles:,} triangles)'
-            return info, None
-
-        elif name == 'decimate_mesh':
-            path = _mesh_relative(str(arguments.get('path', '')))
-            result = _run_mesh_tool('mesh-remesher', path, {
-                'target_faces': int(arguments.get('target_faces', 10000)),
-            })
-            payload = {'type': 'mesh_update', 'url': result['url'], 'face_count': result.get('face_count')}
-            return f"Decimated to {result.get('face_count') or '?'} faces.", payload
-
-        elif name == 'smooth_mesh':
-            path = _mesh_relative(str(arguments.get('path', '')))
-            result = _run_mesh_tool('mesh-smoother', path, {
-                'iterations': int(arguments.get('iterations', 3)),
-            })
-            payload = {'type': 'mesh_update', 'url': result['url']}
-            return f"Smoothed mesh ({arguments.get('iterations')} iterations).", payload
-
-        elif name == 'get_generation_status':
-            status = _request_json('GET', f"{API_BASE}/generate/jobs/{arguments.get('job_id', '')}")
-            if not status:
-                return 'Job not found.', None
-            text = f"Status: {status.get('state')}, Progress: {status.get('progress', 0) * 100:.0f}%"
-            if status.get('result_url'):
-                text += f", Output: {status['result_url']}"
-            if status.get('error'):
-                text += f", Error: {status['error']}"
-            return text, None
-
-        elif name == 'list_workflows':
-            workflows = context.get('workflows', [])
-            if not workflows:
-                return 'No workflows found. Create one in the Workflows tab.', None
-            lines = '\n'.join(f"- {w['id']}: {w['name']}" for w in workflows)
-            return f'Available workflows:\n{lines}', None
-
-        elif name == 'run_workflow':
-            workflow_id = arguments.get('workflow_id', '')
-            workflows = context.get('workflows', [])
-            # 先在前端给的列表里校验 id：不存在就提示模型改用 list_workflows，
-            # 而不是把一个注定失败的运行请求发出去。
-            match = next((w for w in workflows if w['id'] == workflow_id), None)
-            if not match:
-                return f"Workflow '{workflow_id}' not found. Use list_workflows to see available workflows.", None
-            payload = {'type': 'run_workflow', 'workflow_id': workflow_id, 'workflow_name': match['name']}
-            return f"Executing workflow '{match['name']}'…", payload
-
-        elif name == 'create_workflow':
-            steps = arguments.get('steps') or []
-            if not steps:
-                return 'A workflow needs at least one step. Specify the extensions to chain.', None
-
-            input_type = arguments.get('input_type') or 'image'
-            if input_type not in INPUT_NODES:
-                return (
-                    f"Invalid input_type '{input_type}'. Use exactly one of: "
-                    'image (Image node), text (Text node), mesh (Load 3D Mesh node).',
-                    None,
-                )
-
-            extensions = context.get('extensions', [])
-            valid_ids = {e['id'] for e in extensions}
-            if valid_ids:
-                # 防幻觉：模型很容易编造扩展 id，这里逐个校验并回传可用清单。
-                unknown = [s.get('extension_id') for s in steps if s.get('extension_id') not in valid_ids]
-                if unknown:
-                    avail = ', '.join(sorted(valid_ids)) or '(none installed)'
-                    return (
-                        f"Unknown extension id(s): {', '.join(map(str, unknown))}. "
-                        f'Use only these: {avail}.',
-                        None,
-                    )
-
-            wf = _build_workflow_graph(
-                name=arguments.get('name') or 'New Workflow',
-                description=arguments.get('description') or '',
-                input_type=input_type,
-                steps=steps,
-            )
-            payload = {'type': 'create_workflow', 'workflow': wf}
-            return f"Created workflow '{wf['name']}' with {len(steps)} step(s).", payload
-
-        else:
+        if handler is None:
             return f'Unknown tool: {name}', None
+        return handler(arguments, context)
 
     except RuntimeError as e:
         # 工具错误不回滚整个对话：转成文本让模型知道失败原因并自行调整。

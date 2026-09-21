@@ -59,6 +59,9 @@
   --violet-soft: #a78bfa;
   --sky: #38bdf8;
   --rose: #fb7185;
+  /* 扩展分类色（设置页 视图 / 图像 两类图标与 pill 共用，避免各处硬编码） */
+  --teal: #2dd4bf;
+  --magenta: #e879f9;
   --white: #ffffff;
 
   /* component-specific surfaces / hues (re-pointed at the new ramp) */
@@ -247,6 +250,9 @@
   --violet-soft: #6d28d9;
   --sky: #0369a1;
   --rose: #be123c;
+  /* 扩展分类色（与深色主题同名，亮色下加深以保证对比度） */
+  --teal: #0d9488;
+  --magenta: #c026d3;
   --white: #ffffff;
 
   /* component-specific surfaces */

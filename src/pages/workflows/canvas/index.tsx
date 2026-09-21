@@ -29,6 +29,7 @@ import {
   nodePorts,
   nodeSpec,
   portCompatible,
+  targetInputType,
   type WFEdge,
   type WFNode
 } from '../../../types'
@@ -40,6 +41,7 @@ import { uploadFile } from '../../../api'
 import { getT, useT } from '../../../i18n'
 import WorkflowEdge from '../WorkflowEdge'
 import PinMenu, { pinFromEvent, type PinTarget } from '../PinMenu'
+import { setPinAddHandler } from '../pinAdd'
 import { nodeTypes } from '../nodes'
 import { createNodeFromPayload, containerAtScreen, boundingBox, attachToContainer, PALETTE_NODES } from '../canvasUtils'
 import { collapseToSubgraph, expandSubgraph } from '../subgraphUtils'
@@ -77,7 +79,7 @@ function Canvas({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void }) {
 }
 
 function CanvasInner({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void }) {
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, fitView } = useReactFlow()
   const t = useT()
   const commentOps = useContext(CommentOpsContext)
   const theme = useAppStore((s) => s.theme)
@@ -109,6 +111,8 @@ function CanvasInner({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void
   // 并自动接上连线。
   const pendingConnectionRef = useRef<{ nodeId: string; handleType: string | null; handleId: string | null } | null>(null)
   const connectionCompletedRef = useRef(false)
+  // Alt 重连（UE 蓝图语义：按住 Alt 连到已占输入口时，新线替代旧线）。
+  const connectAltRef = useRef(false)
   const [pendingDropPos, setPendingDropPos] = useState<{ x: number; y: number } | null>(null)
   const [connIndex, setConnIndex] = useState(0)
   // Space 调色板的当前行（↑↓ 导航，与 Modly NodePalette 对齐）。
@@ -155,14 +159,9 @@ function CanvasInner({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void
         if (e.key === 'Escape') (target as HTMLInputElement).blur()
         return
       }
-      if (e.code === 'Space') {
-        e.preventDefault()
-        setPaletteQuery('')
-        setPaletteIndex(0)
-        setPaletteOpen((v) => !v)
-      } else if (e.key === 'Escape') {
-        closePalette()
-      }
+      // Space 已让位给 ReactFlow 画布平移（UE 蓝图式快捷键映射）；节点添加
+      // 面板改由「双击空白」唤起（见 handlePaneDoubleClick），此处不再拦截 Space。
+      if (e.key === 'Escape') closePalette()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -222,6 +221,59 @@ function CanvasInner({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void
     }
   }, [selectedIds, subEditorOpen, applyNodeChanges, replaceNodes])
 
+  // UE 蓝图快捷键：F = 帧选中（聚焦所选节点）；C = 把选中节点收进注释框。
+  // 与上面的 onKey 分开成独立 effect，避免那个仅依赖 subEditorOpen 的闭包陈旧。
+  useEffect(() => {
+    function onBlueprintKey(e: KeyboardEvent): void {
+      if (subEditorOpen) return
+      const el = e.target as HTMLElement
+      if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.isContentEditable) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault()
+        const nds = useWorkflowsStore.getState().current?.nodes ?? []
+        if (selectedIds.length > 0) {
+          // 只框选普通节点（注释框 / While 容器这种结构型不计入聚焦目标）。
+          const focused = nds.filter((n) => selectedIds.includes(n.id) && n.type !== 'commentNode' && !isContainerType(n.type))
+          fitView({ nodes: focused.length > 0 ? focused : nds, padding: 0.3, duration: 250 })
+        } else {
+          fitView({ padding: 0.1, duration: 200 })
+        }
+        return
+      }
+      if (e.key === 'c' || e.key === 'C') {
+        if (selectedIds.length === 0) return
+        e.preventDefault()
+        groupAsComment()
+      }
+    }
+    window.addEventListener('keydown', onBlueprintKey)
+    return () => window.removeEventListener('keydown', onBlueprintKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subEditorOpen, selectedIds, fitView])
+
+  // 引脚「+」→ 在引脚旁打开节点面板，并预置"连接意向"让新节点自动接线。
+  // 节点组件与画布是不同模块，这里注册回调；仅主画布注册（子图编辑器不显示该按钮）。
+  useEffect(() => {
+    setPinAddHandler((intent) => {
+      // 输入口「+」→ 新节点落在左侧提供数据；输出口「+」→ 新节点落在右侧承接数据。
+      const dx = intent.handleType === 'source' ? 120 : -120
+      pendingConnectionRef.current = {
+        nodeId: intent.nodeId,
+        handleType: intent.handleType,
+        handleId: intent.handleId
+      }
+      connectionCompletedRef.current = false
+      setPendingDropPos({ x: intent.clientX + dx, y: intent.clientY })
+      setConnIndex(0)
+      setPaletteQuery('')
+      setPaletteOpen(true)
+    })
+    return () => setPinAddHandler(null)
+    // 依赖全部是稳定的 ref / setter，只在挂载时注册一次。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // 从拖线打开时，调色板只列出端口与待连连线兼容的节点
   // （与 Modly 对齐）。扩展节点以 schema 驱动的端口参与过滤，
   // 过滤逻辑与内置节点走同一条路径。
@@ -270,8 +322,10 @@ function CanvasInner({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void
     }
     // 新节点作为待连连线的源端。
     const out = n.ports.output
-    const targetIn = nodePorts(sourceNode.type, sourceNode.data?.extensionId).inputs[0]
-    if (out === 'none' || targetIn === undefined) return false
+    // 待连的是**具体哪个引脚**就按哪个引脚的类型筛：参数引脚可能是 image
+    // （四视图那类），此时只该列出能产出图片的节点。
+    const targetIn = targetInputType(sourceNode, pendingConn.handleId ?? null)
+    if (out === 'none' || targetIn === 'none') return false
     if (!portCompatible(out, targetIn)) return false
     // 单输入规则：目标 handle 必须空闲。
     const handleId = pendingConn.handleId ?? undefined
@@ -543,12 +597,14 @@ function CanvasInner({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void
 
   // 连线拖拽 → 调色板（Modly 对等交互）。正常落到另一个引脚则无事发生；落到空白画布
   // 才弹出兼容节点清单。
-  function handleConnectStart(_e: unknown, params: { nodeId: string | null; handleType: string | null; handleId: string | null }): void {
+  function handleConnectStart(e: MouseEvent | unknown, params: { nodeId: string | null; handleType: string | null; handleId: string | null }): void {
     pendingConnectionRef.current = {
       nodeId: params.nodeId ?? '',
       handleType: params.handleType,
       handleId: params.handleId ?? null
     }
+    // 记录按下瞬间是否按住 Alt——onConnect 拿不到原始事件，只能在这捕捉。
+    connectAltRef.current = e instanceof MouseEvent && e.altKey
     connectionCompletedRef.current = false
     setConnecting(true)
   }
@@ -571,6 +627,20 @@ function CanvasInner({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void
     const clientX = 'clientX' in e ? e.clientX : (e as TouchEvent).changedTouches[0].clientX
     const clientY = 'clientY' in e ? e.clientY : (e as TouchEvent).changedTouches[0].clientY
     setPendingDropPos({ x: clientX, y: clientY })
+    setConnIndex(0)
+    setPaletteQuery('')
+    setPaletteOpen(true)
+  }
+
+  // 双击空白 → 打开节点添加面板（UE 蓝图式：Space 让位给画布平移后，
+  // 面板改由双击唤出）。挂在画布容器 div 上，双击节点不触发（会被排除）。
+  function handlePaneDoubleClick(e: ReactMouseEvent<HTMLElement>): void {
+    const target = e.target as Element
+    // 落在普通节点 / 引脚上不弹面板；While 空腔视为空白（与 handleConnectEnd 同一套判定）。
+    const nodeEl = target.closest('.react-flow__node')
+    const onContainer = !!nodeEl?.classList.contains('react-flow__node-whileNode')
+    if (target.closest('.react-flow__handle') || (nodeEl && !onContainer)) return
+    setPendingDropPos({ x: e.clientX, y: e.clientY })
     setConnIndex(0)
     setPaletteQuery('')
     setPaletteOpen(true)
@@ -674,6 +744,15 @@ function CanvasInner({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void
     setCtxMenu({ x: e.clientX, y: e.clientY })
     setCtxTarget('pane')
   }
+  /** 右键空白 → 添加节点：在落点打开节点面板（复用双击空白那套状态）。 */
+  function addNodeAtPane(): void {
+    if (!ctxMenu) return
+    setPendingDropPos({ x: ctxMenu.x, y: ctxMenu.y })
+    setConnIndex(0)
+    setPaletteQuery('')
+    setPaletteOpen(true)
+    setCtxMenu(null)
+  }
   /** 引脚的右键在捕获阶段先被拦下（React Flow 的 node / pane 菜单便不再触发）。 */
   function handlePinContextMenu(e: ReactMouseEvent): void {
     const pin = pinFromEvent(e)
@@ -760,6 +839,7 @@ function CanvasInner({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void
       // 拖拽连线中：CSS 用它高亮所有可连接的引脚（悬停预览）。
       data-connecting={connecting ? '1' : undefined}
       onContextMenuCapture={handlePinContextMenu}
+      onDoubleClick={handlePaneDoubleClick}
       onDragOver={(e) => {
         e.preventDefault()
         // 外部文件拖入 → 'copy'（原图留在磁盘，我们上传一份副本）。
@@ -817,12 +897,30 @@ function CanvasInner({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void
         onConnectStart={handleConnectStart}
         onConnect={(connection: Connection) => {
           connectionCompletedRef.current = true
+          // UE 蓝图语义：按住 Alt 连到已占用的数据 / exec 输入口 → 新线替代旧线。
+          // 数据口与 exec 口本来就是单线，这里把指到同一输入口的旧线先删掉再连。
+          if (connectAltRef.current && connection.target) {
+            const nds = useWorkflowsStore.getState().current
+            const oldIds = (nds?.edges ?? [])
+              .filter((ed) => ed.target === connection.target && ed.targetHandle === connection.targetHandle)
+              .map((ed) => ed.id)
+            if (oldIds.length > 0) applyEdgeChanges(oldIds.map((id) => ({ id, type: 'remove' as const })))
+          }
+          connectAltRef.current = false
           connect(connection)
         }}
         onConnectEnd={handleConnectEnd}
         onEdgesChange={(changes: EdgeChange<WFEdge>[]) => applyEdgeChanges(changes)}
+        // UE 蓝图式：Alt + 左键点击连线 → 打断该连线（applyEdgeChanges 的 remove change 会自动入栈撤销）。
+        onEdgeClick={(e, edge) => {
+          if (e.altKey) applyEdgeChanges([{ id: edge.id, type: 'remove' }])
+        }}
         isValidConnection={isValidConnection}
         defaultEdgeOptions={{ type: 'workflowEdge' }}
+        // UE 蓝图式交互：左键拖空白=框选，中键/空格+拖拽=平移画布（空格平移为 ReactFlow 内置）。
+        selectionOnDrag
+        panOnDrag={[1]}
+        selectionKeyCode="Shift"
         deleteKeyCode={subEditorOpen ? null : 'Delete'}
         onNodeContextMenu={handleNodeContextMenu}
         onPaneContextMenu={handlePaneContextMenu}
@@ -917,6 +1015,11 @@ function CanvasInner({ onOpenSubgraph }: { onOpenSubgraph?: (id: string) => void
           onExpand={expandSubgraphNode}
           onToggleBreakpoint={toggleBreakpoint}
         />
+      )}
+
+      {/* Blueprint 上下文敏感动作（右键空白）→ 在落点添加节点。 */}
+      {ctxMenu && ctxTarget === 'pane' && (
+        <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onAddNode={addNodeAtPane} />
       )}
 
       {/* 引脚右键：列出该引脚上的连线，可逐条断开。 */}

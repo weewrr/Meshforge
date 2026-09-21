@@ -1,9 +1,12 @@
 """扩展管理：schema 驱动的模型生成器 + 网格处理工具。
 
-GET  /extensions                → 统一列表（内置 + manifest 扩展）
+GET  /extensions                → 统一列表（内置 + manifest 扩展，不含已停用项）
 POST /extensions/install        → 从 GitHub URL 安装（zip → manifest → 目录）
 POST /extensions/install-local  → 从上传的本地目录安装（webkitdirectory）
 POST /extensions/uninstall      → 删除扩展目录 + 注册表条目
+                                   （内置扩展无目录 → 记入停用表，跨重启生效）
+GET  /extensions/disabled       → 列出被停用的内置扩展（可恢复）
+POST /extensions/restore        → 恢复（取消停用）内置扩展
 POST /extensions/reload         → 重新扫描扩展目录
 GET  /extensions/install/status → 轮询安装进度（步骤 / 百分比）
 
@@ -28,6 +31,7 @@ from fastapi import APIRouter, Body, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from generators.registry import EXTENSIONS_DIR, registry
+from extension_state import add_disabled, load_disabled, remove_disabled
 
 router = APIRouter(prefix='/extensions', tags=['extensions'])
 
@@ -151,6 +155,16 @@ def _safe_ext_dir(ext_id: str) -> Path:
     return (EXTENSIONS_DIR / ext_id).resolve()
 
 
+def _builtin_ids() -> set[str]:
+    """全部"代码内置"的扩展 id：内置模型生成器 + 内置网格处理工具。
+
+    这些扩展磁盘上没有目录，卸载它们等于**停用**（写进 disabled-extensions.json），
+    与清单扩展的"真删目录"区分开。`/extensions` 列表用其中的信息给每项打
+    `builtin` 标记，模型页据此在卸载弹窗里说清后果。
+    """
+    return registry.builtin_ids() | {preset['id'] for preset in PROCESS_EXTENSIONS}
+
+
 def _validate_manifest(manifest: dict, source_label: str) -> str:
     """校验 manifest.json 的必填字段，返回扩展 id。
 
@@ -250,6 +264,10 @@ def _install_from_folder(staging: Path, source: str = 'local-upload', source_det
         )
     except OSError:
         pass  # 审计写失败不回滚安装本身
+
+    # 装成功即视为"用户想要它"：清掉可能残留的停用记录（例如先停用了内置扩展、
+    # 又装了同 id 的清单扩展），否则列表里会看不到刚装好的扩展。
+    remove_disabled(ext_id)
 
     _set_progress('done', 100, f'Installed {ext_id}', ext_id)
     return {'ok': True, 'id': ext_id, 'kind': kind, 'name': manifest.get('display_name', ext_id)}
@@ -428,14 +446,19 @@ class InstallUrlBody(BaseModel):
 @router.get('')
 @router.get('/')
 def list_extensions() -> list[dict]:
-    """列出全部 schema 驱动的扩展。
+    """列出全部 schema 驱动的扩展（**不含**被用户停用的内置扩展）。
 
     包含内置模型生成器 + 内置处理工具 + extensions/ 目录下发现的 manifest 扩展。
+    模型生成器那一半在 `registry._generators` 里已经剔除了停用项（`register()`
+    装载时跳过）；`PROCESS_EXTENSIONS` 是 router 里的字面量列表，绕过了 registry，
+    因此这里再按停用集合过滤一次。
 
     Returns:
         扩展描述字典列表（id / display_name / kind / input / output /
-        category / params，manifest 扩展还会带上 HF 下载相关字段）。
+        category / params / builtin，manifest 扩展还会带上 HF 下载相关字段）。
+        `builtin=True` 表示代码内置、卸载只会停用（可经 `/extensions/restore` 恢复）。
     """
+    disabled = load_disabled()
     models = [
         {
             'id': g.id,
@@ -445,6 +468,9 @@ def list_extensions() -> list[dict]:
             'output': g.output_type,
             'category': g.category,
             'params': g.params,
+            # 清单扩展的 generator 由 scan_extensions 直接塞进 _generators，
+            # 不在 _all_generators 里，因此能区分出真正的"代码内置"。
+            'builtin': registry.is_builtin(g.id),
         }
         for g in registry._generators.values()
     ]
@@ -458,7 +484,43 @@ def list_extensions() -> list[dict]:
         for key in ('hfRepo', 'hf_skip_prefixes', 'hf_include_prefixes'):
             if manifest.get(key) is not None:
                 ext[key] = manifest[key]
-    return models + PROCESS_EXTENSIONS + registry.process_tools()
+    return (
+        models
+        + [{**preset, 'builtin': True} for preset in PROCESS_EXTENSIONS if preset['id'] not in disabled]
+        + [{**tool, 'builtin': False} for tool in registry.process_tools()]
+    )
+
+
+@router.get('/disabled')
+def list_disabled_extensions() -> dict:
+    """列出当前被停用（卸载）的**内置**扩展——它们都能恢复。
+
+    模型页据此渲染"已停用"条带，让用户知道内置扩展没被删掉、随时能放回来。
+
+    Returns:
+        `{'ids': [...], 'items': [{'id', 'display_name', 'kind', 'category'}]}`；
+        items 的顺序为先内置模型生成器、后内置网格工具，与列表页的分组顺序一致。
+    """
+    disabled = load_disabled()
+    items: list[dict] = []
+    # 按注册顺序遍历（dict 保序），输出稳定，前端条带不会每次刷新都跳序。
+    for gen in registry._all_generators.values():
+        if gen.id in disabled:
+            items.append({
+                'id': gen.id,
+                'display_name': gen.display_name,
+                'kind': 'model',
+                'category': gen.category,
+            })
+    for preset in PROCESS_EXTENSIONS:
+        if preset['id'] in disabled:
+            items.append({
+                'id': preset['id'],
+                'display_name': preset['display_name'],
+                'kind': 'process',
+                'category': preset.get('category'),
+            })
+    return {'ids': [item['id'] for item in items], 'items': items}
 
 
 @router.get('/install/status')
@@ -714,24 +776,88 @@ class UninstallBody(BaseModel):
     id: str
 
 
+class RestoreBody(BaseModel):
+    """恢复（取消停用）扩展的请求体。"""
+
+    ids: list[str]
+
+
 @router.post('/uninstall')
 async def uninstall_extension(body: UninstallBody) -> dict:
-    """删除扩展目录（若存在）并从注册表注销。
+    """卸载扩展——对两种扩展语义不同，返回体用 `builtin` 区分。
+
+    - **清单扩展**（`extensions/<id>/`）：真删目录，重启后扫描不到，天然持久。
+    - **内置扩展**（代码注册的模型生成器 / 内置网格处理工具）：磁盘上本就没有目录
+      可删，卸载 = **停用**：id 写进 `disabled-extensions.json`，`register()` 下次
+      装载时跳过。这就是旧实现缺的那一环——旧版只摘内存、不落盘，重启后模块重新
+      导入又把扩展装回来，用户看到的正是"卸载了但重启就恢复"。
+
+    Args:
+        body: `{'id': 扩展 id}`。
 
     Returns:
-        `{'ok': True, 'removed': 是否真的删掉了目录, 'id': ...}`。
+        `{'ok': True, 'removed': 是否真删了目录, 'builtin': 是否为内置（只能停用）,
+        'id': ...}`。
+
+    Raises:
+        HTTPException: id 非法（400）；该 id 既无目录也非内置扩展（404）。
     """
     ext_id = body.id
     if not _ID_RE.match(ext_id):
         raise HTTPException(status_code=400, detail='invalid extension id')
+
     dest = _safe_ext_dir(ext_id)
     # 内置扩展没有目录，只有 manifest 扩展才可能被真正删掉。
     removed_dir = dest.exists() and dest.is_dir()
+    builtin = ext_id in _builtin_ids()
+
+    if not removed_dir and not builtin:
+        # 旧实现在这里静默返回 ok，用户点了没反应也不知道为什么。
+        raise HTTPException(status_code=404, detail=f'extension not found: {ext_id}')
+
+    registry.unload(ext_id)
     if removed_dir:
         shutil.rmtree(dest)
-    registry.unload(ext_id)
+        # 同名扩展重新装回来时不该继承旧的停用状态。
+        remove_disabled(ext_id)
+    else:
+        # 内置扩展：停用必须落盘，否则重启后 register() 会把它装回来。
+        add_disabled(ext_id)
     registry.scan_extensions()
-    return {'ok': True, 'removed': removed_dir, 'id': ext_id}
+    return {'ok': True, 'removed': removed_dir, 'builtin': builtin, 'id': ext_id}
+
+
+@router.post('/restore')
+async def restore_extensions(body: RestoreBody) -> dict:
+    """恢复（取消停用）一个或多个内置扩展。
+
+    恢复 = 从停用记录里删掉 + 把实例放回可用集合（内置实例一直留在
+    `registry._all_generators` 里，所以不需要重启、也不用重跑构造代码）。
+
+    Args:
+        body: `{'ids': ['mvdream', ...]}`。
+
+    Returns:
+        `{'ok': True, 'restored': [本次真正从"停用"变回"可用"的 id]}`；不在停用集合
+        里的 id 会被静默忽略（幂等，前端"全部恢复"多传几个也无害）。
+
+    Raises:
+        HTTPException: 某个 id 不合法（400）。
+    """
+    was_disabled = load_disabled()
+    restored: list[str] = []
+    for ext_id in body.ids:
+        if not _ID_RE.match(ext_id):
+            raise HTTPException(status_code=400, detail=f'invalid extension id: {ext_id}')
+        # 把实例放回可用集合（内置实例一直留在 _all_generators 里，无需重启）。
+        registry.restore(ext_id)
+        # 无论是否内置，都把残留的停用记录清掉，保证状态文件与注册表一致。
+        remove_disabled(ext_id)
+        # 只有"之前确实被停用"的才算真恢复，这样返回体能准确反映实际发生的事。
+        if ext_id in was_disabled:
+            restored.append(ext_id)
+    registry.scan_extensions()
+    return {'ok': True, 'restored': restored}
 
 
 @router.post('/reload')

@@ -1,6 +1,7 @@
 node_modules/
 
 out/
+out.bak/
 dist/
 
 *.log
@@ -8,6 +9,10 @@ dist/
 
 
 server/.venv/
+
+# 随包分发的自包含 Python 运行时（打包前置产物，由
+# scripts/prepare_bundled_python.py 生成；体积数百 MB，不入库）
+server/.runtime/
 
 server/workspace/
 
@@ -19,8 +24,11 @@ server/**/__pycache__/
 
 # 运行期敏感/易变文件：本地开发态 DATA_DIR 就在 server/ 下，
 # token 文件绝不能进版本库，jobs.db 是运行数据。
+# disabled-extensions.json 记的是"本机停用了哪些内置扩展"，同样是每台机器
+# 各自的状态，不该被别人 clone 之后继承。
 server/.api-token
 server/jobs.db
+server/disabled-extensions.json
 
 *.pyc
 

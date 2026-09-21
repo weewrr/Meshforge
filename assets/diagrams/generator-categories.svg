@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1656 562" width="1656" height="562"
+     role="img" aria-label="MeshForge generator categories">
+  <title>MeshForge generator categories</title>
+  <desc>Four generator categories: mesh (image to mesh), multiview (image to PNG contact sheet), image (image to image utilities) and process (mesh to mesh cleanup).</desc>
+  <style>
+    .t1   { fill: #0d1526; }
+    .t2   { fill: #4a5768; }
+    .t3   { fill: #8b93a7; }
+    .card { fill: #f6f8fb; stroke: rgba(15,23,42,0.10); }
+    .box  { fill: #ffffff; stroke: rgba(15,23,42,0.13); }
+    .soft { fill: #eef2f8; }
+    .ln   { stroke: #9aa3b5; fill: #9aa3b5; }
+    .lnd  { stroke: #c2cad6; fill: #c2cad6; }
+    .ga   { stop-color: #2f6ee0; }
+    .gb   { stop-color: #7c3aed; }
+
+    @media (prefers-color-scheme: dark) {
+      .t1   { fill: #e6e8ee; }
+      .t2   { fill: #a9b1c3; }
+      .t3   { fill: #6b7386; }
+      .card { fill: #141922; stroke: rgba(255,255,255,0.09); }
+      .box  { fill: #1a1d25; stroke: rgba(255,255,255,0.12); }
+      .soft { fill: #1f2531; }
+      .ln   { stroke: #4a5164; fill: #4a5164; }
+      .lnd  { stroke: #333a48; fill: #333a48; }
+      .ga   { stop-color: #4f8cff; }
+      .gb   { stop-color: #a855f7; }
+    }
+
+    .sans { font-family: 'Segoe UI','Helvetica Neue',Inter,Arial,sans-serif; }
+    .mono { font-family: 'JetBrains Mono','SF Mono',Consolas,Menlo,monospace; }
+    .a    { stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+  </style>
+  <defs>
+    <linearGradient id="gw" x1="0" y1="0" x2="1" y2="1">
+      <stop class="ga" offset="0"/>
+      <stop class="gb" offset="1"/>
+    </linearGradient>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+            orient="auto-start-reverse">
+      <path d="M0 1L9 5L0 9z" class="ln" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <text x="30" y="42" class="sans t1" font-size="25" font-weight="600">Four generator categories</text>
+  <text x="30" y="70" class="sans t3" font-size="15.5">Each generator declares a category; the Models page groups by it and the palette colors nodes accordingly.</text>
+  <rect x="30" y="112" width="372" height="416" rx="16" class="card"/>
+  <rect x="30" y="112" width="372" height="4" rx="2" fill="#34d399"/>
+  <text x="54" y="154" class="sans t1" font-size="20" font-weight="600">mesh</text>
+  <rect x="54" y="168" width="84.8" height="22" rx="11" fill="#34d399" fill-opacity="0.14"/>
+  <text x="96.4" y="183" text-anchor="middle" class="mono" font-size="11.5" fill="#34d399">8 models</text>
+  <text x="54" y="216" class="mono t2" font-size="13">image → mesh</text>
+  <text x="54" y="242" class="sans t3" font-size="13.5">Image to a textured 3D mesh — the core of</text>
+  <text x="54" y="261" class="sans t3" font-size="13.5">MeshForge.</text>
+  <line x1="54" y1="308" x2="378" y2="308" class="lnd"/>
+  <circle cx="58" cy="332" r="3" fill="#34d399"/>
+  <text x="70" y="336" class="sans t2" font-size="13.5">Hunyuan3D 2 mini</text>
+  <circle cx="58" cy="356" r="3" fill="#34d399"/>
+  <text x="70" y="360" class="sans t2" font-size="13.5">Hunyuan3D 2 turbo</text>
+  <circle cx="58" cy="380" r="3" fill="#34d399"/>
+  <text x="70" y="384" class="sans t2" font-size="13.5">Hunyuan3D 2 50-step</text>
+  <circle cx="58" cy="404" r="3" fill="#34d399"/>
+  <text x="70" y="408" class="sans t2" font-size="13.5">Hunyuan3D 2 MV turbo</text>
+  <circle cx="58" cy="428" r="3" fill="#34d399"/>
+  <text x="70" y="432" class="sans t2" font-size="13.5">Hunyuan3D 2 MV fast</text>
+  <circle cx="58" cy="452" r="3" fill="#34d399"/>
+  <text x="70" y="456" class="sans t2" font-size="13.5">Hunyuan3D 2 MV 50-step</text>
+  <circle cx="58" cy="476" r="3" fill="#34d399"/>
+  <text x="70" y="480" class="sans t2" font-size="13.5">InstantMesh large</text>
+  <circle cx="58" cy="500" r="3" fill="#34d399"/>
+  <text x="70" y="504" class="sans t2" font-size="13.5">InstantMesh base</text>
+  <rect x="438" y="112" width="372" height="416" rx="16" class="card"/>
+  <rect x="438" y="112" width="372" height="4" rx="2" fill="#2dd4bf"/>
+  <text x="462" y="154" class="sans t1" font-size="20" font-weight="600">multiview</text>
+  <rect x="462" y="168" width="46.8" height="22" rx="11" fill="#2dd4bf" fill-opacity="0.14"/>
+  <text x="485.4" y="183" text-anchor="middle" class="mono" font-size="11.5" fill="#2dd4bf">3 models</text>
+  <text x="462" y="216" class="mono t2" font-size="13">image / text → PNG sheet</text>
+  <text x="462" y="242" class="sans t3" font-size="13.5">One image (or a prompt) to a multi-view</text>
+  <text x="462" y="261" class="sans t3" font-size="13.5">contact sheet.</text>
+  <line x1="462" y1="308" x2="786" y2="308" class="lnd"/>
+  <circle cx="466" cy="332" r="3" fill="#2dd4bf"/>
+  <text x="478" y="336" class="sans t2" font-size="13.5">MVDream (text)</text>
+  <circle cx="466" cy="356" r="3" fill="#2dd4bf"/>
+  <text x="478" y="360" class="sans t2" font-size="13.5">Stable Zero123</text>
+  <circle cx="466" cy="380" r="3" fill="#2dd4bf"/>
+  <text x="478" y="384" class="sans t2" font-size="13.5">Wonder3D Plus</text>
+  <rect x="846" y="112" width="372" height="416" rx="16" class="card"/>
+  <rect x="846" y="112" width="372" height="4" rx="2" fill="#e879f9"/>
+  <text x="870" y="154" class="sans t1" font-size="20" font-weight="600">image</text>
+  <rect x="870" y="168" width="84.8" height="22" rx="11" fill="#e879f9" fill-opacity="0.14"/>
+  <text x="912.4" y="183" text-anchor="middle" class="mono" font-size="11.5" fill="#e879f9">8 models</text>
+  <text x="870" y="216" class="mono t2" font-size="13">image → image</text>
+  <text x="870" y="242" class="sans t3" font-size="13.5">Image-to-image utilities: matting,</text>
+  <text x="870" y="261" class="sans t3" font-size="13.5">upscaling, depth, line art.</text>
+  <line x1="870" y1="308" x2="1194" y2="308" class="lnd"/>
+  <circle cx="874" cy="332" r="3" fill="#e879f9"/>
+  <text x="886" y="336" class="sans t2" font-size="13.5">RMBG-2.0</text>
+  <circle cx="874" cy="356" r="3" fill="#e879f9"/>
+  <text x="886" y="360" class="sans t2" font-size="13.5">BiRefNet</text>
+  <circle cx="874" cy="380" r="3" fill="#e879f9"/>
+  <text x="886" y="384" class="sans t2" font-size="13.5">Real-ESRGAN x2</text>
+  <circle cx="874" cy="404" r="3" fill="#e879f9"/>
+  <text x="886" y="408" class="sans t2" font-size="13.5">Depth-Anything-V2</text>
+  <circle cx="874" cy="428" r="3" fill="#e879f9"/>
+  <text x="886" y="432" class="sans t2" font-size="13.5">MoGe</text>
+  <circle cx="874" cy="452" r="3" fill="#e879f9"/>
+  <text x="886" y="456" class="sans t2" font-size="13.5">M-LSD</text>
+  <circle cx="874" cy="476" r="3" fill="#e879f9"/>
+  <text x="886" y="480" class="sans t2" font-size="13.5">CodeFormer</text>
+  <circle cx="874" cy="500" r="3" fill="#e879f9"/>
+  <text x="886" y="504" class="sans t2" font-size="13.5">Universal Matting</text>
+  <rect x="1254" y="112" width="372" height="416" rx="16" class="card"/>
+  <rect x="1254" y="112" width="372" height="4" rx="2" fill="#34d399"/>
+  <text x="1278" y="154" class="sans t1" font-size="20" font-weight="600">process</text>
+  <rect x="1278" y="168" width="62" height="22" rx="11" fill="#34d399" fill-opacity="0.14"/>
+  <text x="1309" y="183" text-anchor="middle" class="mono" font-size="11.5" fill="#34d399">5 models</text>
+  <text x="1278" y="216" class="mono t2" font-size="13">mesh → mesh</text>
+  <text x="1278" y="242" class="sans t3" font-size="13.5">CPU mesh cleanup and conversion, powered by</text>
+  <text x="1278" y="261" class="sans t3" font-size="13.5">trimesh + numpy.</text>
+  <line x1="1278" y1="308" x2="1602" y2="308" class="lnd"/>
+  <circle cx="1282" cy="332" r="3" fill="#34d399"/>
+  <text x="1294" y="336" class="sans t2" font-size="13.5">mesh-repair</text>
+  <circle cx="1282" cy="356" r="3" fill="#34d399"/>
+  <text x="1294" y="360" class="sans t2" font-size="13.5">mesh-smoother</text>
+  <circle cx="1282" cy="380" r="3" fill="#34d399"/>
+  <text x="1294" y="384" class="sans t2" font-size="13.5">mesh-remesher</text>
+  <circle cx="1282" cy="404" r="3" fill="#34d399"/>
+  <text x="1294" y="408" class="sans t2" font-size="13.5">mesh-optimizer</text>
+  <circle cx="1282" cy="428" r="3" fill="#34d399"/>
+  <text x="1294" y="432" class="sans t2" font-size="13.5">mesh-exporter</text>
+</svg>

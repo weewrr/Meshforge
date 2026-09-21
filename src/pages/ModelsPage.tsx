@@ -23,6 +23,7 @@ import {
   type SourceId
 } from './models/types'
 import { CUBE_ICON } from './models/ui'
+import { DisabledBar } from './models/DisabledBar'
 import { ExtensionDrawer } from './models/ExtensionDrawer'
 import { ExtensionList } from './models/ExtensionList'
 import { InstallProgressBar } from './models/InstallProgressBar'
@@ -30,6 +31,7 @@ import { Toolbar } from './models/Toolbar'
 import { UninstallModal } from './models/UninstallModal'
 import { useExtensionInstall } from './models/useExtensionInstall'
 import { useModelDownloads } from './models/useModelDownloads'
+import { useRestore } from './models/useRestore'
 import { useUninstall } from './models/useUninstall'
 
 // ─── Page ────────────────────────────────────────────────────────────────────
@@ -48,10 +50,11 @@ export default function ModelsPage() {
   const searchRef = useRef<HTMLInputElement>(null)
   const sortRef = useRef<HTMLDivElement>(null)
 
-  // 安装 / 下载 / 卸载三类状态逻辑
+  // 安装 / 下载 / 卸载 / 恢复四类状态逻辑
   const install = useExtensionInstall(refresh)
   const downloads = useModelDownloads()
   const uninstall = useUninstall(refresh, setSelectedId)
+  const restore = useRestore(refresh)
 
   // ── Data loading ─────────────────────────────────────────────────────────
 
@@ -66,6 +69,9 @@ export default function ModelsPage() {
       setLoading(false)
     }
     void downloads.refreshModelStatus()
+    // 已停用条带与本列表同源（都来自后端），任何一次刷新都带上它，
+    // 否则卸载后条带要等下次手动刷新才出现。
+    void restore.refreshDisabled()
   }
 
   // 挂载时拉一次列表；refresh 每次渲染重建，刻意不进依赖（仅首挂载加载）。
@@ -272,6 +278,13 @@ export default function ModelsPage() {
           </div>
         </div>
       )}
+
+      {/* 已停用的内置扩展：卸载 ≠ 删除，可一键放回来 */}
+      <DisabledBar
+        items={restore.disabled}
+        busy={restore.restoring}
+        onRestore={(ids) => void restore.restore(ids)}
+      />
 
       {/* Extensions list */}
       <div className="ex-list">

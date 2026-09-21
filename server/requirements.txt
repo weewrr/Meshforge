@@ -7,7 +7,7 @@
 # （MCP stdio server / Hunyuan3D 推理服务），本文件不含它们。
 
 fastapi>=0.115
-uvicorn>=0.30
+uvicorn>=0.53.0
 # pydantic 被 routers 直接 import（模型校验），显式声明而非依赖 fastapi 传递引入
 pydantic>=2.7
 python-multipart>=0.0.9

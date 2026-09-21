@@ -17,7 +17,7 @@ trimesh>=4.0
 # 网格工具（processor 节点）QEM 减面 / 孔洞闭合 / 非流形清理
 pymeshlab>=2023.12
 # 系统监控（system_stats 路由）
-psutil>=5.9
+psutil>=7.2.2
 # ModelScope 模型下载 CLI —— 设置页「模型下载」分区用 modelscope download 拉取
 # 外部 AI 服务（Hunyuan3D / InstantMesh / Zero123 …）的权重。随后端 venv 一起
 # 安装，打包/部署即一并带上（见 13.x 模型下载节点）。
